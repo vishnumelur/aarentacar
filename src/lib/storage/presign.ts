@@ -51,3 +51,54 @@ export async function presignVehiclePhotoGet(key: string): Promise<string> {
     expiresIn: 3600,
   });
 }
+
+// --- Customer documents (Plan #3) ---
+
+const DOC_MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+};
+
+export function isAllowedDocumentContentType(mime: string): boolean {
+  return mime in DOC_MIME_TO_EXT;
+}
+
+export function buildCustomerDocumentKey(opts: {
+  userId: string;
+  mimeType: string;
+}): string {
+  const ext = DOC_MIME_TO_EXT[opts.mimeType] ?? 'bin';
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const nonce = randomBytes(6).toString('hex').slice(0, 12);
+  return `documents/${opts.userId}/${yyyy}/${mm}/${nonce}.${ext}`;
+}
+
+export async function presignCustomerDocumentUpload(opts: {
+  userId: string;
+  mimeType: string;
+}): Promise<{ url: string; key: string; expiresInSec: number }> {
+  if (!isAllowedDocumentContentType(opts.mimeType)) {
+    throw new Error(`Unsupported content type: ${opts.mimeType}`);
+  }
+  const key = buildCustomerDocumentKey(opts);
+  const url = await getSignedUrl(
+    s3(),
+    new PutObjectCommand({
+      Bucket: BUCKETS.documents,
+      Key: key,
+      ContentType: opts.mimeType,
+    }),
+    { expiresIn: 600 },
+  );
+  return { url, key, expiresInSec: 600 };
+}
+
+export async function presignCustomerDocumentGet(key: string): Promise<string> {
+  return getSignedUrl(s3(), new GetObjectCommand({ Bucket: BUCKETS.documents, Key: key }), {
+    expiresIn: 3600,
+  });
+}

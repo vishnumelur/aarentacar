@@ -15,6 +15,13 @@
       "when": 1780298318403,
       "tag": "0001_nice_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780304816764,
+      "tag": "0002_clammy_forge",
+      "breakpoints": true
     }
   ]
 }

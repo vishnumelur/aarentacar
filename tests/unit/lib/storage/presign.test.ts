@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildVehiclePhotoKey, isAllowedPhotoContentType } from '@/lib/storage/presign';
+import {
+  buildVehiclePhotoKey,
+  isAllowedPhotoContentType,
+  buildCustomerDocumentKey,
+  isAllowedDocumentContentType,
+} from '@/lib/storage/presign';
 
 describe('buildVehiclePhotoKey', () => {
   it('includes the vehicle id, yyyy/mm prefix, and 12-char nonce', () => {
@@ -25,4 +30,24 @@ describe('isAllowedPhotoContentType', () => {
       expect(isAllowedPhotoContentType(m)).toBe(false);
     },
   );
+});
+
+describe('buildCustomerDocumentKey', () => {
+  it('includes userId + yyyy/mm prefix + 12-char nonce', () => {
+    const key = buildCustomerDocumentKey({ userId: 'user-1', mimeType: 'image/jpeg' });
+    expect(key).toMatch(/^documents\/user-1\/\d{4}\/\d{2}\/[a-f0-9]{12}\.jpg$/);
+  });
+  it('supports PDF mime', () => {
+    const key = buildCustomerDocumentKey({ userId: 'u', mimeType: 'application/pdf' });
+    expect(key).toMatch(/\.pdf$/);
+  });
+});
+
+describe('isAllowedDocumentContentType', () => {
+  it.each(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])('allows %s', (m) => {
+    expect(isAllowedDocumentContentType(m)).toBe(true);
+  });
+  it.each(['image/gif', 'application/zip', 'text/html'])('rejects %s', (m) => {
+    expect(isAllowedDocumentContentType(m)).toBe(false);
+  });
 });

@@ -7,3 +7,5 @@ export * from './vehicle-categories';
 export * from './vehicle-types';
 export * from './vehicles';
 export * from './vehicle-rates';
+export * from './customer-profiles';
+export * from './customer-documents';
