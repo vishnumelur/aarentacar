@@ -139,10 +139,24 @@ export default async function DriverJobDetailPage({
           </>
         )}
 
-        {row.assignmentStatus === 'accepted' && (
-          <div className="rounded-md bg-green-100 p-3 text-sm text-green-900">
-            You&apos;ve accepted this job. Handover capture lands in the next milestone (Plan #6
-            Task 7).
+        {row.assignmentStatus === 'accepted' && row.bookingStatus === 'dispatched' && (
+          <div className="space-y-3">
+            <div className="rounded-md bg-green-100 p-3 text-sm text-green-900">
+              You&apos;ve accepted this job. When you arrive at the pickup, tap below to start the
+              handover.
+            </div>
+            <Link
+              href={`/driver/jobs/${row.assignmentId}/handover`}
+              className="block rounded-md bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
+            >
+              Start handover
+            </Link>
+          </div>
+        )}
+
+        {row.assignmentStatus === 'accepted' && row.bookingStatus === 'in_progress' && (
+          <div className="rounded-md bg-blue-100 p-3 text-sm text-blue-900">
+            Handover complete. Return inspection lands in the next milestone.
           </div>
         )}
 

@@ -8,6 +8,11 @@ import {
   presignCustomerDocumentUpload,
   isAllowedDocumentContentType,
 } from '@/lib/storage/presign';
+import {
+  presignInspectionPhotoUpload,
+  presignSignatureUpload,
+  isAllowedInspectionContentType,
+} from '@/lib/storage/inspections';
 
 const bodySchema = z.discriminatedUnion('kind', [
   z.object({
@@ -18,6 +23,18 @@ const bodySchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('customer_document'),
     mimeType: z.string(),
+  }),
+  z.object({
+    kind: z.literal('inspection_photo'),
+    bookingId: z.uuid(),
+    stage: z.enum(['handover', 'return']),
+    slot: z.string().min(1).max(40),
+    mimeType: z.string(),
+  }),
+  z.object({
+    kind: z.literal('signature'),
+    bookingId: z.uuid(),
+    stage: z.enum(['handover', 'return']),
   }),
 ]);
 
@@ -48,13 +65,38 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json(r);
   }
 
-  // customer_document — any authenticated user uploads their own docs
-  if (!isAllowedDocumentContentType(parsed.mimeType)) {
-    return NextResponse.json({ error: 'unsupported_mime' }, { status: 415 });
+  if (parsed.kind === 'customer_document') {
+    // any authenticated user uploads their own docs
+    if (!isAllowedDocumentContentType(parsed.mimeType)) {
+      return NextResponse.json({ error: 'unsupported_mime' }, { status: 415 });
+    }
+    const r = await presignCustomerDocumentUpload({
+      userId: user.id,
+      mimeType: parsed.mimeType,
+    });
+    return NextResponse.json(r);
   }
-  const r = await presignCustomerDocumentUpload({
-    userId: user.id,
-    mimeType: parsed.mimeType,
-  });
+
+  if (parsed.kind === 'inspection_photo') {
+    if (user.role !== 'driver') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    if (!isAllowedInspectionContentType(parsed.mimeType)) {
+      return NextResponse.json({ error: 'unsupported_mime' }, { status: 415 });
+    }
+    const r = await presignInspectionPhotoUpload({
+      bookingId: parsed.bookingId,
+      stage: parsed.stage,
+      slot: parsed.slot,
+      mimeType: parsed.mimeType,
+    });
+    return NextResponse.json(r);
+  }
+
+  // signature
+  if (user.role !== 'driver') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  const r = await presignSignatureUpload(parsed.bookingId, parsed.stage);
   return NextResponse.json(r);
 }
