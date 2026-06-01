@@ -17,3 +17,6 @@ export * from './booking-events';
 export * from './driver-profiles';
 export * from './driver-pings';
 export * from './booking-assignments';
+export * from './damage-inspections';
+export * from './agreements';
+export * from './push-subscriptions';
