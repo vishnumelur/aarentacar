@@ -1,8 +1,17 @@
-import 'dotenv/config';
-import { eq } from 'drizzle-orm';
-import { db } from '@/db';
-import { users, settings } from '@/db/schema';
-import { hashPassword } from '@/lib/auth/password';
+import { config as loadEnv } from 'dotenv';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// Load env BEFORE any module that touches `@/lib/env` (e.g. @/db). ESM
+// hoists static imports above all other statements, so we use dynamic
+// imports below to ensure load order.
+for (const file of ['.env.local', '.env']) {
+  const path = resolve(process.cwd(), file);
+  if (existsSync(path)) {
+    loadEnv({ path });
+    break;
+  }
+}
 
 const email = process.env.SUPERADMIN_EMAIL;
 const password = process.env.SUPERADMIN_PASSWORD;
@@ -13,6 +22,11 @@ if (!email || !password) {
 }
 
 async function main() {
+  const { eq } = await import('drizzle-orm');
+  const { db } = await import('@/db');
+  const { users, settings } = await import('@/db/schema');
+  const { hashPassword } = await import('@/lib/auth/password');
+
   const existing = await db.select().from(users).where(eq(users.email, email!)).limit(1);
   if (existing.length > 0) {
     console.warn(`Super-Admin ${email} already exists — skipping.`);
