@@ -78,9 +78,9 @@ The minimum platform that takes real bookings end-to-end with a modern UX:
 - Deposit / security hold handling
 - Manager Portal: full CRUD on cars (single + bulk CSV), pricing, advance-book rules, booking approval, KYC review, driver dispatch (auto-suggest nearest + manager confirm), promo codes, basic reports, agent sub-permissions
 - Driver Portal: installable PWA, push notifications, job accept, navigation, live location ping, handover + return photo inspection, in-app digital signature capture
-- Super-Admin Portal: system health, user/role management, audit log, feature flags, provider credentials UI (Stripe/Tabby/Mapbox/Resend keys via encrypted DB storage), maintenance mode
+- Super-Admin Portal: system health, user/role management, audit log, feature flags, provider credentials UI (Stripe/Tabby/Mapbox/SMTP keys via encrypted DB storage), maintenance mode
 - TOTP 2FA: mandatory for Super-Admin (Phase 1)
-- Live driver tracking on map (customer-side, after dispatch)
+- Live driver tracking on map (customer-side, after dispatch) — Swiggy-style animated car marker that smoothly glides along the route, rotates with direction, with live ETA countdown and status-pill transitions (full UX spec in §11.2.1)
 - Add-ons & extras at checkout
 - Damage inspection with photos at handover + return
 - Digital rental agreement e-signature, PDF generated and stored
@@ -119,7 +119,7 @@ Built once Phase 1 has steady booking flow and real customer data:
 | Maps | Mapbox GL JS + Mapbox Geocoding + Mapbox Directions | Free tier covers launch; cheaper than Google |
 | Payments | Stripe (cards, Apple/Google Pay) + Tabby SDK (BNPL) + manual COD + manual Bank Transfer | Stripe operates in UAE in AED |
 | File storage | MinIO (S3-compatible, self-hosted) | Customer docs, vehicle photos, damage photos, PDFs |
-| Email | Resend (transactional) | 3K/month free tier; swap to self-hosted SMTP later if needed |
+| Email | Self-hosted SMTP — Postfix + OpenDKIM on the Hetzner VPS, DNS via Cloudflare | 100% self-hosted; zero monthly cost; Cloudflare handles SPF / DKIM / DMARC / MX records. Cloudflare Email Routing forwards inbound mail to existing mailbox |
 | Push notifications | Web Push API with self-generated VAPID keys | Free, browser-native, works on Android + iOS 16.4+ when PWA installed |
 | PWA | Driver portal is installable; customer is web-only | next-pwa or hand-rolled service worker |
 | Background jobs | pg-boss (Postgres-backed queue) | No extra Redis needed |
@@ -127,7 +127,7 @@ Built once Phase 1 has steady booking flow and real customer data:
 | Container orchestration | Docker Compose | 5 containers: app, postgres, minio, caddy, worker |
 | CI / deploy | Manual at launch: local → `git push` → VPS → `git pull` → `docker compose up -d --build`. Add GitHub Actions later. | `.env.production` lives on server, never in git |
 
-All software in the stack is free / open-source. Recurring costs at launch: Hetzner VPS rental + domain renewal + payment gateway transaction fees. Optional later costs if usage grows past free tiers: Mapbox, Resend.
+All software in the stack is free / open-source. Recurring costs at launch: Hetzner VPS rental + domain renewal + payment gateway transaction fees. Optional later costs if usage grows past free tiers: Mapbox only (email is fully self-hosted via Postfix + OpenDKIM with Cloudflare DNS).
 
 ---
 
@@ -140,8 +140,11 @@ All software in the stack is free / open-source. Recurring costs at launch: Hetz
 3. **`minio`** — S3-compatible object storage, persistent volume, separate buckets for `documents/`, `vehicles/`, `inspections/`, `agreements/`, `backups/`
 4. **`caddy`** — public-facing reverse proxy, auto Let's Encrypt SSL for `aa-rentacar.com`, `manager.aa-rentacar.com`, `driver.aa-rentacar.com`, `admin.aa-rentacar.com`
 5. **`worker`** — same Next.js image with `pg-boss` worker entrypoint; runs scheduled jobs (deposit-release sweep, doc-expiry warnings, driver-ping retention, daily DB backup, etc.)
+6. **`postfix`** — Postfix MTA for outbound transactional email; listens on internal Docker network only (not on the host's public `25/tcp`)
+7. **`opendkim`** — DKIM signer sidecar for Postfix; signs outbound mail with 2048-bit RSA key for `aa-rentacar.com`
+8. **`clamav`** — antivirus daemon for file-upload scanning (see §13)
 
-Caddy is the only container with ports exposed to the host (`80`, `443`).
+Caddy is the only container with ports exposed to the host (`80`, `443`). See §11.5 for the mail server setup and §11.2.1 for the Swiggy-style live tracking UX.
 
 ### 5.2 Subdomain routing
 
@@ -219,7 +222,7 @@ Driver PWA POSTs `{ lat, lng }` to `/api/driver/ping` every 10 seconds while the
 - **`pg_boss_*`** — managed by pg-boss library
 - **`audit_logs`** — id, actor_user_id, action, target_type, target_id, payload (jsonb), ip_hash, created_at — immutable
 - **`settings`** — id, key (unique), value (jsonb), updated_by_user_id, updated_at — single-row-per-key config
-- **`provider_credentials`** — id, provider (`stripe | tabby | mapbox | resend`), env (`live | test`), key_name, value_encrypted (bytea, AES-256-GCM with master key from `ENCRYPTION_KEY` env), last_four (for masked display), updated_by_user_id, updated_at, last_used_at
+- **`provider_credentials`** — id, provider (`stripe | tabby | mapbox | smtp`), env (`live | test`), key_name, value_encrypted (bytea, AES-256-GCM with master key from `ENCRYPTION_KEY` env), last_four (for masked display), updated_by_user_id, updated_at, last_used_at. For multi-field providers like SMTP, `value_encrypted` stores a JSON blob (host, port, username, password, from-address, from-name); `last_four` shows host + redacted password for masked display.
 - **`notifications`** — id, user_id, kind, title, body, payload (jsonb), read_at, created_at
 
 ---
@@ -293,7 +296,7 @@ For developers / system owner. IP-allowlistable. **Not for daily operations.**
 - **System**: health (uptime, DB pool, MinIO usage, pending jobs, error rate), build info, logs viewer, manual DB backup, restart workers
 - **Users & roles**: list, create/promote/demote/suspend, reset password, agent permission matrix
 - **Feature flags**: toggle Phase 2 features (live tracking, ratings, loyalty, corporate), maintenance mode
-- **Provider Credentials UI** *(new in spec, see §11.4)*: form per provider (Stripe, Tabby, Mapbox, Resend); paste once, then masked display `sk_•••••••1234`; "Test connection" button before save; audit-logged
+- **Provider Credentials UI** *(new in spec, see §11.4)*: form per provider (Stripe, Tabby, Mapbox, SMTP); paste once, then masked display `sk_•••••••1234`; "Test connection" button before save; audit-logged
 - **Tools**: read-only DB query runner (writes require explicit confirmation), re-send any system email, reprocess failed payment, manage sessions, pg-boss dashboard
 - **Audit logs**: immutable, filterable
 - **Secrets reference**: lists which env vars the app expects + purpose + last-rotated date (values themselves live in `.env.production` or `provider_credentials` table, never displayed)
@@ -412,15 +415,64 @@ Customer-facing cancellation is allowed until handover; after handover, only man
 
 ### 11.2 Live tracking architecture
 
-- Driver PWA POSTs `{lat, lng}` to `/api/driver/ping` every 10s while job is active
+- Driver PWA POSTs `{lat, lng, heading?, speed?}` to `/api/driver/ping` every 10s while job is active. Uses `navigator.geolocation.watchPosition` with `enableHighAccuracy: true`; falls back to 30s interval if browser blocks high-accuracy
 - Server upserts `driver_profiles.current_lat/lng/last_ping_at` and inserts into `driver_pings`
 - Customer subscribes to `/api/booking/{code}/track` via Server-Sent Events; server pushes updates as pings arrive
 - ETA computed via Mapbox Directions API; cached 60s per (driver_pos, pickup_pos) pair to stay under free tier
 - pg-boss job nightly prunes `driver_pings` older than 24h
 
+### 11.2.1 Customer tracking UX — "Swiggy-style" animated car
+
+The customer's tracking view (visible from the moment the manager dispatches a driver until the driver arrives at the pickup) is designed to feel premium and alive — not a marker that jumps every 10 seconds.
+
+**Animated car marker:**
+- Custom Mapbox marker rendered as a top-down car SVG icon (different sprite per category: sedan, SUV, limo)
+- Between server-sent ping updates, the marker **smoothly interpolates** along a `requestAnimationFrame` loop at 60fps. Two strategies, picked at runtime:
+  - **Snap mode** (low-confidence pings): linear interpolation from previous lat/lng to new lat/lng over the duration of one ping interval. Simple, robust.
+  - **Route mode** (high-confidence pings + active route): client requests the Mapbox Directions polyline once per route segment, and the marker glides along the polyline rather than a straight line — so it visually follows the actual road
+- Icon **rotates to face the direction of travel** using bearing computed from the previous → current point pair (or from the GPS `heading` field if the device provided it)
+- Marker has a soft **pulse halo** in brand red (#dc2626) so it's instantly findable on the map
+
+**Trail polyline:**
+- Animated red gradient polyline traces the route from the driver's start (dispatch location) to the current position
+- The line "draws itself" using a `line-progress` Mapbox expression — looks like Swiggy's filling-in dashed line
+
+**Pickup pin:**
+- Animated "drop and bounce" entry when the screen first loads
+- Continuous gentle pulse to draw attention
+- Distance + bearing label that updates as the driver approaches
+
+**Live status card** (overlay panel at the bottom of the screen, framer-motion transitions):
+- Driver photo + name + car model + plate
+- **Live ETA countdown** — re-fetched every 30s from Mapbox Directions; ticks down second-by-second between fetches for a fluid feel
+- **Status pill** transitions through stages with smooth fade + slide:
+  1. *"Driver assigned"* → *"On the way"* (when first ping received)
+  2. *"On the way"* → *"X minutes away"* (when ETA < 15min)
+  3. *"X minutes away"* → *"Almost there"* (when ETA < 3min)
+  4. *"Almost there"* → *"Driver has arrived"* (when distance < 100m for ≥ 20s)
+- "Call driver" + "WhatsApp driver" buttons
+- Tappable "Trip details" link that expands a bottom sheet with the full booking summary
+
+**Notifications synced to status changes:**
+- Web push fires on each status transition above (configurable per customer in profile)
+- Email summary sent only at "Driver has arrived" (avoids inbox spam)
+
+**Map auto-framing:**
+- Camera auto-fits to the bounds of (driver, pickup) with smooth `easeTo` transitions whenever either point moves significantly
+- User can pinch / pan to break auto-frame; a small "Recenter" FAB returns to auto-frame
+- Dark map style by default in the evening (`mapbox/dark-v11`) and light by day (`mapbox/streets-v12`), based on customer's local time
+
+**Reduced-motion accessibility:**
+- Respect `prefers-reduced-motion: reduce` — disables interpolation, halo pulse, and status-pill transitions; marker just jumps cleanly between pings; ETA updates without ticking animation
+
+**Performance budget:**
+- Animation runs entirely client-side; server only emits pings. No re-render per frame — Mapbox handles GPU compositing
+- Tracking page bundle target: < 200 KB gzipped JS + Mapbox GL JS (~250 KB gz)
+- SSE reconnect with exponential backoff on transient disconnect; falls back to short-poll every 5s if SSE blocked by network
+
 ### 11.3 Notifications
 
-- **Email** (Resend): account verification, KYC outcome, booking confirmation, payment receipt, driver dispatch, ETA updates, return reminder, agreement PDF
+- **Email** (self-hosted Postfix + OpenDKIM, DNS via Cloudflare): account verification, KYC outcome, booking confirmation, payment receipt, driver dispatch, ETA updates, return reminder, agreement PDF. App sends via SMTP to `localhost:25`; Postfix queues + signs with DKIM + delivers. Inbound replies routed via Cloudflare Email Routing to the existing `manager@aa-rentacar.com` mailbox. See §11.5 for the full mail setup.
 - **Web push** (VAPID): driver job offer (loud), customer "driver is on the way / 5 min away", customer KYC approved, customer booking approved
 - **In-app inbox**: persistent notification list in each portal
 
@@ -430,16 +482,58 @@ Templates stored in code with i18n keys; rendered in the customer's `preferred_l
 
 Replaces the need to edit `.env.production` on the server for API keys.
 
-- Super-Admin → Provider Credentials page lists Stripe, Tabby, Mapbox, Resend; each has its own card
+- Super-Admin → Provider Credentials page lists Stripe, Tabby, Mapbox, SMTP; each has its own card
 - Each card supports `live` and `test` environments
-- Form fields per provider (Stripe: secret key + publishable key + webhook signing secret; Tabby: public key + secret key + webhook signing secret; Mapbox: access token; Resend: API key)
+- Form fields per provider (Stripe: secret key + publishable key + webhook signing secret; Tabby: public key + secret key + webhook signing secret; Mapbox: access token; SMTP: host, port, username, password, from-address, from-name)
 - Paste once; on save the value is encrypted with AES-256-GCM using `ENCRYPTION_KEY` from env (rotation-safe) and stored as `bytea` in `provider_credentials.value_encrypted`. `last_four` is stored separately for masked display
 - After save: input shown as `sk_•••••••1234`; full value never returned by the API
-- **"Test connection"** button per provider hits a tiny endpoint that exercises the key (e.g. Stripe: list 1 charge; Tabby: token check; Mapbox: small geocode; Resend: account info) — confirms before commit
+- **"Test connection"** button per provider hits a tiny endpoint that exercises the key (e.g. Stripe: list 1 charge; Tabby: token check; Mapbox: small geocode; SMTP: send a test email to a super-admin-specified address) — confirms before commit
 - Every save and every server-side decryption is `audit_logs`-logged
 - App initialization order: try DB credentials first, fall back to env vars (so we can bootstrap before the UI is reachable, and operate even if DB is empty)
 
 `ENCRYPTION_KEY` (32 random bytes, base64-encoded) is the only secret that *must* live in `.env.production`. Loss of `ENCRYPTION_KEY` = inability to read stored credentials (which is why "Test connection" should be used before relying on saved values, and rotation requires re-entering every key).
+
+### 11.5 Self-hosted mail server (Postfix + OpenDKIM + Cloudflare DNS)
+
+Sending and receiving email without paying any third-party service.
+
+**Containers (added to docker-compose.yml):**
+- **`postfix`** — Postfix MTA configured for outbound-only smarthost-free direct delivery; listens on `25/tcp` inside the Docker network; **not** exposed to the public internet for inbound (Cloudflare Email Routing handles inbound — see below)
+- **`opendkim`** — signs outgoing mail with a 2048-bit RSA DKIM key, key stored encrypted on disk
+
+The Next.js `app` container sends transactional mail via SMTP over the Docker network to `postfix:25`. No authentication needed because Postfix only accepts mail from the internal Docker network (binds to internal interface only) — public port `25` on the host is NOT opened.
+
+**Cloudflare DNS records** (managed in the Cloudflare dashboard, not by us):
+- `aa-rentacar.com` `A` → Hetzner VPS public IP (proxied OFF for mail)
+- `aa-rentacar.com` `MX` → `route1.mx.cloudflare.net` etc. (Cloudflare Email Routing for inbound)
+- `aa-rentacar.com` `TXT` → `v=spf1 ip4:<vps-ip> ~all` (allows our VPS to send)
+- `default._domainkey.aa-rentacar.com` `TXT` → DKIM public key (from OpenDKIM)
+- `_dmarc.aa-rentacar.com` `TXT` → `v=DMARC1; p=quarantine; rua=mailto:dmarc@aa-rentacar.com`
+
+**Inbound mail (replies + manager@aa-rentacar.com):**
+- **Cloudflare Email Routing** (free) catches all `*@aa-rentacar.com` mail and forwards each address to a destination Gmail / external mailbox
+- We don't need to run IMAP, webmail, or maintain inboxes ourselves
+- App-generated noreply addresses (e.g. `no-reply@aa-rentacar.com`) silently drop replies via a Cloudflare routing rule
+
+**Reverse DNS (PTR):**
+- Set in Hetzner control panel: the VPS public IP's PTR must resolve to `mail.aa-rentacar.com`
+- Without correct PTR, big providers (Gmail, Outlook) reject our mail. One-time setup, then never touch again.
+
+**IP warm-up:**
+- Hetzner VPS IPs have mixed reputation. First 7 days: send only to internal addresses + small test list (10–50/day)
+- Day 8–14: ramp to ~200/day
+- After that: production volume
+- Monitor bounce rate + spam complaints in OpenDKIM/Postfix logs surfaced in Super-Admin → System tab
+
+**Risks acknowledged:**
+- Self-hosted SMTP has higher spam-folder risk than managed services (Resend, SendGrid)
+- If deliverability becomes a problem, the Provider Credentials UI lets us paste a managed-service SMTP credential (Mailgun, Brevo, SES) without code changes — the app already speaks plain SMTP
+
+**Why this works for the use case:**
+- Volume is modest (a few emails per booking, hundreds of bookings/day)
+- DMARC + DKIM + SPF + clean PTR + warm-up → 95%+ inbox placement to major providers
+- Customer is paying nothing per email forever
+- All mail content goes through our infrastructure — no third-party reads it
 
 ---
 
@@ -513,7 +607,7 @@ docker compose up -d --build
 docker compose exec app pnpm db:migrate
 ```
 
-`.env.production` lives in `/opt/aarentacar/.env.production` on the server, owned `root:root`, mode `600`. Contains only: `DATABASE_URL`, `MINIO_*`, `ENCRYPTION_KEY`, `SESSION_COOKIE_DOMAIN`, `RESEND_API_KEY` (bootstrap), `STRIPE_SECRET_KEY` (bootstrap), `TABBY_SECRET_KEY` (bootstrap), `MAPBOX_TOKEN` (bootstrap). Provider keys are bootstrap-only: once the Super-Admin UI is reachable, keys are managed in DB.
+`.env.production` lives in `/opt/aarentacar/.env.production` on the server, owned `root:root`, mode `600`. Contains only: `DATABASE_URL`, `MINIO_*`, `ENCRYPTION_KEY`, `SESSION_COOKIE_DOMAIN`, `SMTP_HOST=localhost`, `SMTP_PORT=25`, `SMTP_FROM=no-reply@aa-rentacar.com` (bootstrap), `STRIPE_SECRET_KEY` (bootstrap), `TABBY_SECRET_KEY` (bootstrap), `MAPBOX_TOKEN` (bootstrap). Provider keys are bootstrap-only: once the Super-Admin UI is reachable, keys are managed in DB.
 
 ### 14.4 Backups & restore drill
 
@@ -545,7 +639,7 @@ docker compose exec app pnpm db:migrate
 
 These are intentionally not specified here and will be decided during or after implementation, when more concrete needs surface:
 
-- Final pricing for Mapbox / Resend after launch traffic is real
+- Final pricing for Mapbox after launch traffic is real
 - SMS gateway choice (Etisalat, Unifonic, Twilio) — add when SMS becomes desired
 - WhatsApp Business API — add if WhatsApp becomes desired
 - Multi-emirate expansion — data model supports it via `branches`; UI work deferred
@@ -562,7 +656,7 @@ The Phase 1 implementation is complete when:
 1. A new customer can: visit the site → browse → book a car → upload KYC → wait for approval → return and complete booking → pay by Card, Tabby, COD, or Bank Transfer → see the driver dispatched and live-tracked → meet the driver and sign the agreement → return the car → receive the receipt and signed PDF.
 2. A manager can: log in → see all bookings → approve / reject KYC → approve / reject bookings → dispatch drivers with the auto-suggested nearest driver → add a new car individually or via CSV bulk import → set pricing per car (hourly/daily/weekly/monthly/package) → set advance-book days per category → create promo codes → view revenue and occupancy reports.
 3. A driver can: install the PWA → log in → toggle availability → receive a push notification when dispatched → accept a job → navigate to pickup → take handover photos → capture the customer's signature → mark handover complete → at return time, take return photos → flag damage if any → mark return complete.
-4. A super-admin can: log in (with TOTP 2FA) → view system health → manage users and roles → toggle feature flags → paste Stripe + Tabby + Mapbox + Resend API keys via the Provider Credentials UI and have the app pick them up without a restart → view audit logs → run a manual DB backup.
+4. A super-admin can: log in (with TOTP 2FA) → view system health → manage users and roles → toggle feature flags → paste Stripe + Tabby + Mapbox API keys + SMTP credentials via the Provider Credentials UI and have the app pick them up without a restart → view audit logs → run a manual DB backup → confirm a test email arrives in their inbox.
 5. The site loads in under 2 seconds on a typical Dubai mobile network (3G/4G) and scores 90+ on Lighthouse Mobile for the customer landing page.
 6. Both English and Arabic versions render correctly with full RTL flip in Arabic.
 
