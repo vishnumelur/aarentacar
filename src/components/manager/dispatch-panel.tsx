@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -62,9 +63,9 @@ export function DispatchPanel({ bookingId }: Props) {
       {suggestions !== null && suggestions.length === 0 && (
         <p className="rounded-md border bg-muted/30 p-3 text-sm">
           No drivers are currently available. Onboard one in{' '}
-          <a href="/manager/drivers" className="text-primary underline">
+          <Link href="/manager/drivers" className="text-primary underline">
             Drivers
-          </a>{' '}
+          </Link>{' '}
           or toggle an existing driver to &quot;available&quot;.
         </p>
       )}
