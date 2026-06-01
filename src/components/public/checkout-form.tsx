@@ -88,10 +88,10 @@ export function CheckoutForm({ vehicleId, pickupAt, returnAt, rentalKind, addonI
       {outcome && !outcome.ok && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {ERROR_COPY[outcome.error] ?? outcome.error}
-          {outcome.error === 'advance_book_violation' && outcome.details?.minAdvanceDays != null && (
+          {outcome.error === 'advance_book_violation' && outcome.details?.minAdvanceDays !== undefined && (
             <span> ({outcome.details.minAdvanceDays} day minimum.)</span>
           )}
-          {outcome.error === 'driver_under_age' && outcome.details?.minDriverAge != null && (
+          {outcome.error === 'driver_under_age' && outcome.details?.minDriverAge !== undefined && (
             <span> (Must be {outcome.details.minDriverAge}+.)</span>
           )}
         </div>
