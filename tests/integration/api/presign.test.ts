@@ -21,11 +21,10 @@ async function makeUser(role: 'customer' | 'manager' | 'superadmin') {
   return { user: u, token };
 }
 
-function req(body: unknown, token?: string) {
-  const h = new Headers({ 'content-type': 'application/json' });
+function req(body: unknown) {
   return new Request('http://localhost/x', {
     method: 'POST',
-    headers: h,
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
 }
