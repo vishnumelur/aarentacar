@@ -2,3 +2,8 @@ export * from './users';
 export * from './sessions';
 export * from './settings';
 export * from './audit-logs';
+export * from './branches';
+export * from './vehicle-categories';
+export * from './vehicle-types';
+export * from './vehicles';
+export * from './vehicle-rates';

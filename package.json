@@ -25,6 +25,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:bootstrap": "tsx scripts/bootstrap.ts",
+    "db:seed-inventory": "tsx scripts/seed-inventory.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

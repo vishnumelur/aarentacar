@@ -8,6 +8,13 @@
       "when": 1780295487099,
       "tag": "0000_reflective_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780298318403,
+      "tag": "0001_nice_paper_doll",
+      "breakpoints": true
     }
   ]
 }
