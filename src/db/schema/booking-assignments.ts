@@ -18,10 +18,10 @@ export const bookingAssignments = pgTable(
       .references(() => bookings.id, { onDelete: 'cascade' }),
     driverId: uuid('driver_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'restrict' }),
     assignedByUserId: uuid('assigned_by_user_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'restrict' }),
     status: assignmentStatusEnum('status').notNull().default('offered'),
     declineReason: text('decline_reason'),
     assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),

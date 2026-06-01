@@ -6,16 +6,19 @@ import {
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
-import { users } from './users';
+import { driverProfiles } from './driver-profiles';
 import { bookings } from './bookings';
 
 export const driverPings = pgTable(
   'driver_pings',
   {
     id: uuid('id').defaultRandom().primaryKey(),
+    // Anchor on driver_profiles.userId (unique) rather than users.id so
+    // a ping requires the user to have a driver profile and cascades
+    // tidy up if the profile is removed.
     driverId: uuid('driver_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => driverProfiles.userId, { onDelete: 'cascade' }),
     bookingId: uuid('booking_id').references(() => bookings.id, { onDelete: 'set null' }),
     lat: doublePrecision('lat').notNull(),
     lng: doublePrecision('lng').notNull(),
