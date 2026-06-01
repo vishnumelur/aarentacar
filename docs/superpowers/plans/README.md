@@ -8,7 +8,7 @@ producing working, testable software on its own.
 |---|---|---|---|
 | 1 | [Foundation](2026-06-01-foundation.md) | Next.js scaffold, auth, DB, subdomain routing, i18n, CI | ✅ shipped |
 | 2 | [Inventory](2026-06-01-inventory.md) | Manager fleet CRUD, bulk CSV, rate cards, MinIO photos + polish | ✅ shipped |
-| 3 | [Customer KYC](2026-06-01-customer-kyc.md) | Customer registration + Verification Center + manager review queue | written, ready to execute |
+| 3 | [Customer KYC](2026-06-01-customer-kyc.md) | Customer registration + Verification Center + manager review queue | ✅ shipped |
 | 4 | [Browse & Book](2026-06-01-browse-and-book.md) | Public search, vehicle detail, booking engine (pre-payment) | written |
 | 5 | [Manager Dispatch](2026-06-01-manager-dispatch.md) | Booking approval + nearest-driver auto-suggest + confirm | written |
 | 6 | [Driver Portal PWA](2026-06-01-driver-portal.md) | Installable PWA, accept job, navigation, photos, e-sign, live ping | written |
@@ -19,8 +19,13 @@ producing working, testable software on its own.
 | 11 | [Super-Admin + Workers](2026-06-01-superadmin-completion.md) | Health, feature flags, audit log, TOTP 2FA, pg-boss workers | written |
 | 12 | [Mail Server](2026-06-01-mail-server.md) | Postfix + OpenDKIM + Cloudflare DNS + react-email templates | written |
 | 13 | [Production Deploy](2026-06-01-production-deploy.md) | Caddy SSL, deploy ritual, nightly backups, GlitchTip, ClamAV | written |
+| 14 | [Phase 1 Gaps + Phase 2 + Deferred](2026-06-01-phase-2-and-deferred.md) | Holding pen: 7 Phase-1 gaps to fold in, 5 Phase-2 features, indefinitely-deferred list | written |
 
-After all 13 plans ship: the acceptance criteria in §16 of the spec is met.
+After all 13 plans ship + the 7 Phase-1 gaps in Plan #14 §A are folded in:
+the acceptance criteria in §16 of the spec is met.
+
+**Validation:** See [Spec Coverage Audit](../specs/2026-06-01-coverage-audit.md)
+for the section-by-section spec→plan mapping that produced Plan #14.
 
 ## How to execute
 Each plan uses the TDD bite-sized-task format from `superpowers:writing-plans`.
