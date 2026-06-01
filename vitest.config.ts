@@ -8,6 +8,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
+    // Integration tests share a single Postgres dev DB and TRUNCATE
+    // in beforeEach; running test files concurrently corrupts shared
+    // state. Disable file-level parallelism to keep them isolated.
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

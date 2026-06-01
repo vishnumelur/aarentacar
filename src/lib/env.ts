@@ -17,7 +17,12 @@ const envSchema = z.object({
   MINIO_PORT: z.coerce.number().int().default(9000),
   MINIO_ACCESS_KEY: z.string().default('minio-dev'),
   MINIO_SECRET_KEY: z.string().default('minio-dev-secret'),
-  MINIO_USE_SSL: z.coerce.boolean().default(false),
+  // z.coerce.boolean treats any non-empty string as true (incl. "false"),
+  // so parse explicitly via a stringbool.
+  MINIO_USE_SSL: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .transform((v) => v === true || v === 'true' || v === '1')
+    .default(false),
 });
 
 export type Env = z.infer<typeof envSchema>;
