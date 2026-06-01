@@ -1,11 +1,19 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
-import { bookings, bookingEvents, auditLogs } from '@/db/schema';
+import {
+  bookings,
+  bookingEvents,
+  auditLogs,
+  driverProfiles,
+  bookingAssignments,
+  users,
+} from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { canAccessPortal } from '@/lib/auth/roles';
+import { haversineKm } from '@/lib/geo/distance';
 
 export type ApproveOutcome =
   | { ok: true }
@@ -108,5 +116,192 @@ export async function rejectBooking(formData: FormData): Promise<RejectOutcome> 
     revalidatePath(`/my-bookings/${booking.code}`);
     // Refund flow will land in Plan #7 when payments are wired
     return { ok: true as const };
+  });
+}
+
+export interface DriverSuggestion {
+  userId: string;
+  fullName: string;
+  photoUrl: string | null;
+  status: 'available' | 'on_duty' | 'off_duty' | 'suspended';
+  distanceKm: number | null;
+  lastPingMinutesAgo: number | null;
+}
+
+export type SuggestOutcome =
+  | { ok: true; suggestions: DriverSuggestion[] }
+  | { ok: false; error: 'forbidden' | 'invalid_input' | 'not_found' | 'no_pickup_coords' };
+
+export async function suggestDrivers(input: { bookingId: string }): Promise<SuggestOutcome> {
+  const user = await getCurrentUser();
+  if (!user || !canAccessPortal(user.role, 'manager')) {
+    return { ok: false, error: 'forbidden' };
+  }
+  if (!input.bookingId) return { ok: false, error: 'invalid_input' };
+
+  const [booking] = await db.select().from(bookings).where(eq(bookings.id, input.bookingId)).limit(1);
+  if (!booking) return { ok: false, error: 'not_found' };
+
+  // Identify drivers already assigned to other ACTIVE bookings (offered/accepted)
+  const activeAssignments = await db
+    .select({ driverId: bookingAssignments.driverId })
+    .from(bookingAssignments)
+    .where(
+      and(
+        ne(bookingAssignments.bookingId, input.bookingId),
+        inArray(bookingAssignments.status, ['offered', 'accepted']),
+      ),
+    );
+  const busyIds = new Set(activeAssignments.map((a) => a.driverId));
+
+  // Candidate drivers: status='available', not in busyIds. Join users for display.
+  const candidates = await db
+    .select({
+      userId: driverProfiles.userId,
+      status: driverProfiles.status,
+      currentLat: driverProfiles.currentLat,
+      currentLng: driverProfiles.currentLng,
+      lastPingAt: driverProfiles.lastPingAt,
+      photoUrl: driverProfiles.photoUrl,
+      fullName: users.fullName,
+    })
+    .from(driverProfiles)
+    .innerJoin(users, eq(users.id, driverProfiles.userId))
+    .where(eq(driverProfiles.status, 'available'))
+    .orderBy(asc(users.fullName));
+
+  const available = candidates.filter((c) => !busyIds.has(c.userId));
+
+  const now = Date.now();
+  const suggestions: DriverSuggestion[] = available.map((c) => {
+    let distanceKm: number | null = null;
+    if (
+      booking.pickupLat !== null &&
+      booking.pickupLng !== null &&
+      c.currentLat !== null &&
+      c.currentLng !== null
+    ) {
+      distanceKm = haversineKm(
+        { lat: c.currentLat, lng: c.currentLng },
+        { lat: booking.pickupLat, lng: booking.pickupLng },
+      );
+    }
+    const lastPingMinutesAgo = c.lastPingAt
+      ? Math.floor((now - c.lastPingAt.getTime()) / 60_000)
+      : null;
+    return {
+      userId: c.userId,
+      fullName: c.fullName,
+      photoUrl: c.photoUrl,
+      status: c.status,
+      distanceKm,
+      lastPingMinutesAgo,
+    };
+  });
+
+  // Sort: drivers with known distance first (ascending), then nameless fallback
+  suggestions.sort((a, b) => {
+    if (a.distanceKm === null && b.distanceKm === null) return 0;
+    if (a.distanceKm === null) return 1;
+    if (b.distanceKm === null) return -1;
+    return a.distanceKm - b.distanceKm;
+  });
+
+  // Cap to top 5
+  return { ok: true, suggestions: suggestions.slice(0, 5) };
+}
+
+export type DispatchOutcome =
+  | { ok: true; assignmentId: string }
+  | {
+      ok: false;
+      error:
+        | 'forbidden'
+        | 'invalid_input'
+        | 'not_found'
+        | 'invalid_status'
+        | 'driver_not_available'
+        | 'driver_busy';
+    };
+
+export async function dispatchDriver(input: {
+  bookingId: string;
+  driverUserId: string;
+}): Promise<DispatchOutcome> {
+  const user = await getCurrentUser();
+  if (!user || !canAccessPortal(user.role, 'manager')) {
+    return { ok: false, error: 'forbidden' };
+  }
+  if (!input.bookingId || !input.driverUserId) {
+    return { ok: false, error: 'invalid_input' };
+  }
+
+  return await db.transaction(async (tx) => {
+    const [booking] = await tx.select().from(bookings).where(eq(bookings.id, input.bookingId)).limit(1);
+    if (!booking) return { ok: false as const, error: 'not_found' };
+    if (booking.status !== 'approved') {
+      return { ok: false as const, error: 'invalid_status' };
+    }
+
+    const [profile] = await tx
+      .select()
+      .from(driverProfiles)
+      .where(eq(driverProfiles.userId, input.driverUserId))
+      .limit(1);
+    if (!profile) return { ok: false as const, error: 'not_found' };
+    if (profile.status !== 'available') {
+      return { ok: false as const, error: 'driver_not_available' };
+    }
+
+    // Race-condition recheck: driver must not already be on a different active assignment
+    const busy = await tx
+      .select({ id: bookingAssignments.id })
+      .from(bookingAssignments)
+      .where(
+        and(
+          eq(bookingAssignments.driverId, input.driverUserId),
+          ne(bookingAssignments.bookingId, input.bookingId),
+          inArray(bookingAssignments.status, ['offered', 'accepted']),
+        ),
+      )
+      .limit(1);
+    if (busy.length > 0) return { ok: false as const, error: 'driver_busy' };
+
+    const [assignment] = await tx
+      .insert(bookingAssignments)
+      .values({
+        bookingId: input.bookingId,
+        driverId: input.driverUserId,
+        assignedByUserId: user.id,
+        status: 'offered',
+      })
+      .returning({ id: bookingAssignments.id });
+    if (!assignment) return { ok: false as const, error: 'invalid_input' };
+
+    await tx
+      .update(bookings)
+      .set({ status: 'dispatched', updatedAt: new Date() })
+      .where(eq(bookings.id, input.bookingId));
+
+    await tx.insert(bookingEvents).values({
+      bookingId: input.bookingId,
+      actorUserId: user.id,
+      kind: 'dispatched',
+      payload: { driverUserId: input.driverUserId, assignmentId: assignment.id },
+    });
+
+    await tx.insert(auditLogs).values({
+      actorUserId: user.id,
+      action: 'booking.dispatched',
+      targetType: 'booking',
+      targetId: input.bookingId,
+      payload: { code: booking.code, driverUserId: input.driverUserId },
+    });
+
+    revalidatePath(`/manager/bookings/${booking.code}`);
+    revalidatePath('/manager/bookings');
+    // Push notification firing happens in Plan #6 — for now the assignment row + status change
+    // are sufficient for the manager UI to update.
+    return { ok: true as const, assignmentId: assignment.id };
   });
 }
