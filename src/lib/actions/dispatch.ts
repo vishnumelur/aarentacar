@@ -236,7 +236,7 @@ export async function dispatchDriver(input: {
     return { ok: false, error: 'invalid_input' };
   }
 
-  return await db.transaction(async (tx) => {
+  const result: DispatchOutcome = await db.transaction(async (tx): Promise<DispatchOutcome> => {
     const [booking] = await tx.select().from(bookings).where(eq(bookings.id, input.bookingId)).limit(1);
     if (!booking) return { ok: false as const, error: 'not_found' };
     if (booking.status !== 'approved') {
@@ -300,8 +300,35 @@ export async function dispatchDriver(input: {
 
     revalidatePath(`/manager/bookings/${booking.code}`);
     revalidatePath('/manager/bookings');
-    // Push notification firing happens in Plan #6 — for now the assignment row + status change
-    // are sufficient for the manager UI to update.
     return { ok: true as const, assignmentId: assignment.id };
   });
+
+  if (result.ok) {
+    // Fire web push outside the transaction — best effort, errors swallowed so a push
+    // failure never rolls back a successful dispatch.
+    try {
+      const { sendToUser } = await import('@/lib/push/send');
+      const [bk] = await db
+        .select({
+          code: bookings.code,
+          pickupAt: bookings.pickupAt,
+          address: bookings.pickupAddress,
+        })
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+      if (bk) {
+        const when = new Date(bk.pickupAt).toLocaleString();
+        await sendToUser(input.driverUserId, {
+          title: 'New job assigned',
+          body: `${bk.code} · Pickup at ${bk.address} on ${when}`,
+          url: `/driver/jobs/${result.assignmentId}`,
+        });
+      }
+    } catch (err) {
+      console.warn('dispatch push fire failed', err);
+    }
+  }
+
+  return result;
 }
