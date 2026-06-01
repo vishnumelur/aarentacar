@@ -1,7 +1,8 @@
 'use server';
 
 import { z } from 'zod';
-import { and, asc, eq, gt, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import {
   vehicles,
@@ -9,10 +10,16 @@ import {
   vehicleCategories,
   vehicleRates,
   bookings,
+  bookingAddons,
+  bookingEvents,
   addons as addonsTable,
+  customerProfiles,
+  customerDocuments,
 } from '@/db/schema';
 import { hasOverlap, isActiveBookingStatus } from '@/lib/pricing/availability';
 import { computeBestRate, type Rate, type RatePick } from '@/lib/pricing/compute-rate';
+import { getCurrentUser } from '@/lib/auth/get-current-user';
+import { nextBookingCode } from '@/lib/bookings/code';
 
 const searchSchema = z.object({
   categorySlug: z.enum(['car', 'limousine']).optional(),
@@ -276,3 +283,224 @@ export async function priceQuote(input: z.infer<typeof quoteSchema>): Promise<Pr
     },
   };
 }
+
+// --- createBooking ----------------------------------------------------------
+
+const createBookingSchema = z.object({
+  vehicleId: z.uuid(),
+  pickupAt: z.iso.datetime(),
+  returnAt: z.iso.datetime(),
+  rentalKind: z.enum(['self_drive', 'chauffeur']),
+  addonIds: z.array(z.uuid()).max(20).default([]),
+  pickupAddress: z.string().min(2).max(500),
+});
+
+export type CreateBookingOutcome =
+  | { ok: true; code: string }
+  | {
+      ok: false;
+      error:
+        | 'forbidden'
+        | 'invalid_input'
+        | 'profile_required'
+        | 'kyc_required'
+        | 'driver_under_age'
+        | 'license_required'
+        | 'license_expired_during_rental'
+        | 'advance_book_violation'
+        | 'vehicle_taken'
+        | 'vehicle_not_found'
+        | 'no_rate_available';
+      details?: { minAdvanceDays?: number; minDriverAge?: number };
+    };
+
+export async function createBooking(
+  input: z.infer<typeof createBookingSchema>,
+): Promise<CreateBookingOutcome> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== 'customer') return { ok: false, error: 'forbidden' };
+  if (user.verificationStatus !== 'verified') return { ok: false, error: 'kyc_required' };
+
+  const parsed = createBookingSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'invalid_input' };
+
+  const pickupAt = new Date(parsed.data.pickupAt);
+  const returnAt = new Date(parsed.data.returnAt);
+  if (returnAt <= pickupAt) return { ok: false, error: 'invalid_input' };
+
+  return await db.transaction(async (tx) => {
+    // Vehicle + type + category
+    const [v] = await tx
+      .select()
+      .from(vehicles)
+      .where(and(eq(vehicles.id, parsed.data.vehicleId), isNull(vehicles.deletedAt)))
+      .limit(1);
+    if (!v) return { ok: false as const, error: 'vehicle_not_found' };
+
+    const [type] = await tx.select().from(vehicleTypes).where(eq(vehicleTypes.id, v.typeId)).limit(1);
+    if (!type) return { ok: false as const, error: 'vehicle_not_found' };
+    const [cat] = await tx
+      .select()
+      .from(vehicleCategories)
+      .where(eq(vehicleCategories.id, type.categoryId))
+      .limit(1);
+    if (!cat) return { ok: false as const, error: 'vehicle_not_found' };
+
+    // Advance-book rule
+    const daysToPickup = (pickupAt.getTime() - Date.now()) / 86_400_000;
+    if (daysToPickup < cat.advanceBookMinDays) {
+      return {
+        ok: false as const,
+        error: 'advance_book_violation',
+        details: { minAdvanceDays: cat.advanceBookMinDays },
+      };
+    }
+
+    // Customer profile required
+    const [profile] = await tx
+      .select()
+      .from(customerProfiles)
+      .where(eq(customerProfiles.userId, user.id))
+      .limit(1);
+    if (!profile) return { ok: false as const, error: 'profile_required' };
+
+    // Min driver age (Plan #14 §A.4)
+    const ageYears =
+      (pickupAt.getTime() - new Date(profile.dateOfBirth).getTime()) /
+      (365.25 * 86_400_000);
+    if (ageYears < cat.minDriverAge) {
+      return {
+        ok: false as const,
+        error: 'driver_under_age',
+        details: { minDriverAge: cat.minDriverAge },
+      };
+    }
+
+    // License validity (Plan #14 §A.5): most recent approved driving license front
+    if (parsed.data.rentalKind === 'self_drive') {
+      const license = await tx
+        .select()
+        .from(customerDocuments)
+        .where(
+          and(
+            eq(customerDocuments.customerId, user.id),
+            eq(customerDocuments.type, 'driving_license_front'),
+            eq(customerDocuments.status, 'approved'),
+          ),
+        )
+        .orderBy(desc(customerDocuments.reviewedAt))
+        .limit(1);
+      const lic = license[0];
+      if (!lic) return { ok: false as const, error: 'license_required' };
+      if (lic.expiryDate) {
+        const expiryStr = lic.expiryDate;
+        const returnDateStr = returnAt.toISOString().slice(0, 10);
+        if (expiryStr < returnDateStr) {
+          return { ok: false as const, error: 'license_expired_during_rental' };
+        }
+      }
+    }
+
+    // Re-check overlap atomically
+    const existing = await tx
+      .select({
+        vehicleId: bookings.vehicleId,
+        pickupAt: bookings.pickupAt,
+        returnAt: bookings.returnAt,
+        status: bookings.status,
+      })
+      .from(bookings)
+      .where(and(eq(bookings.vehicleId, v.id), gt(bookings.returnAt, new Date())));
+    if (
+      hasOverlap(
+        existing
+          .filter((b) => isActiveBookingStatus(b.status))
+          .map((b) => ({
+            vehicleId: b.vehicleId,
+            pickupAt: b.pickupAt,
+            returnAt: b.returnAt,
+            status: b.status,
+          })),
+        { vehicleId: v.id, pickupAt, returnAt },
+      )
+    ) {
+      return { ok: false as const, error: 'vehicle_taken' };
+    }
+
+    // Re-quote pricing server-side (don't trust client totals)
+    const ratesRows = await tx
+      .select()
+      .from(vehicleRates)
+      .where(eq(vehicleRates.vehicleId, v.id));
+    const pick = computeBestRate(
+      ratesRows.map((r) => ({
+        rateKind: r.rateKind,
+        priceAed: r.priceAed,
+        packageHours: r.packageHours,
+        packageName: r.packageName,
+      })),
+      pickupAt,
+      returnAt,
+    );
+    if (!pick) return { ok: false as const, error: 'no_rate_available' };
+
+    // Addons
+    const addonRows =
+      parsed.data.addonIds.length > 0
+        ? await tx.select().from(addonsTable).where(inArray(addonsTable.id, parsed.data.addonIds))
+        : [];
+    const validAddons = addonRows.filter((a) => a.active);
+    const addonsAed = validAddons.reduce((s, a) => s + a.priceAed, 0);
+
+    const subtotalAed = pick.totalAed;
+    const depositAed = cat.defaultDepositAed;
+    const totalAed = subtotalAed + addonsAed;
+
+    const code = await nextBookingCode(tx);
+
+    const [booking] = await tx
+      .insert(bookings)
+      .values({
+        code,
+        customerId: user.id,
+        vehicleId: v.id,
+        rentalKind: parsed.data.rentalKind,
+        pickupAt,
+        returnAt,
+        pickupAddress: parsed.data.pickupAddress,
+        status: 'pending_payment',
+        subtotalAed,
+        addonsAed,
+        discountAed: 0,
+        depositAed,
+        totalAed,
+      })
+      .returning({ id: bookings.id });
+    if (!booking) {
+      return { ok: false as const, error: 'invalid_input' };
+    }
+
+    if (validAddons.length > 0) {
+      await tx.insert(bookingAddons).values(
+        validAddons.map((a) => ({
+          bookingId: booking.id,
+          addonId: a.id,
+          quantity: 1,
+          unitPriceAed: a.priceAed,
+        })),
+      );
+    }
+
+    await tx.insert(bookingEvents).values({
+      bookingId: booking.id,
+      actorUserId: user.id,
+      kind: 'created',
+      payload: { totalAed, rentalKind: parsed.data.rentalKind },
+    });
+
+    revalidatePath('/my-bookings');
+    revalidatePath('/manager/bookings');
+    return { ok: true as const, code };
+  });
+}
+
