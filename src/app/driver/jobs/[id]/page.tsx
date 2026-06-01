@@ -155,8 +155,23 @@ export default async function DriverJobDetailPage({
         )}
 
         {row.assignmentStatus === 'accepted' && row.bookingStatus === 'in_progress' && (
-          <div className="rounded-md bg-blue-100 p-3 text-sm text-blue-900">
-            Handover complete. Return inspection lands in the next milestone.
+          <div className="space-y-3">
+            <div className="rounded-md bg-blue-100 p-3 text-sm text-blue-900">
+              Handover complete. When the rental period ends, tap below to capture the return
+              inspection.
+            </div>
+            <Link
+              href={`/driver/jobs/${row.assignmentId}/return`}
+              className="block rounded-md bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground"
+            >
+              Start return inspection
+            </Link>
+          </div>
+        )}
+
+        {row.assignmentStatus === 'accepted' && row.bookingStatus === 'completed' && (
+          <div className="rounded-md bg-green-100 p-3 text-sm text-green-900">
+            Job complete. Deposit settlement happens in the manager portal (Plan #7).
           </div>
         )}
 

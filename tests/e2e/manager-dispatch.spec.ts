@@ -32,7 +32,8 @@ test.describe('Manager dispatch', () => {
     await expect(page.getByRole('heading', { name: 'Dispatch a driver' })).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByText('Dispatch Test Driver')).toBeVisible();
+    // Use .first() — repeated test runs accumulate fixture drivers in the suggester list
+    await expect(page.getByText('Dispatch Test Driver').first()).toBeVisible();
 
     // 5. Confirm dispatch on the first row
     await page.getByRole('button', { name: 'Confirm dispatch' }).first().click();
