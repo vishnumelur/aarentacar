@@ -10,7 +10,7 @@ plan reflects the real state of the repo at that moment.
 | # | File | Delivers |
 |---|---|---|
 | 1 | [2026-06-01-foundation.md](2026-06-01-foundation.md) | Next.js scaffold, auth, DB, subdomain routing, i18n, CI |
-| 2 | `NNNN-NN-NN-inventory.md` *(written after #1 ships)* | Manager fleet CRUD, bulk CSV, rate cards |
+| 2 | [2026-06-01-inventory.md](2026-06-01-inventory.md) | Manager fleet CRUD, bulk CSV, rate cards, MinIO photo upload |
 | 3 | `NNNN-NN-NN-customer-kyc.md` | Customer registration + Verification Center + manager review queue |
 | 4 | `NNNN-NN-NN-browse-and-book.md` | Public search, vehicle detail, booking engine (no payment yet) |
 | 5 | `NNNN-NN-NN-manager-dispatch.md` | Booking approval + nearest-driver auto-suggest + confirm |
