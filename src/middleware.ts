@@ -1,16 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import createIntlMiddleware from 'next-intl/middleware';
-import { routing } from '@/i18n/routing';
 import { PORTAL_TO_SEGMENT } from '@/lib/auth/roles';
 import { resolvePortalFromRequest } from '@/lib/auth/resolve-portal';
 
-const intlMiddleware = createIntlMiddleware(routing);
-
+/**
+ * Subdomain → URL segment rewrite. We do NOT use next-intl's routing
+ * middleware because we want cookie-based locale (no /en or /ar URL
+ * prefix); see src/i18n/request.ts.
+ */
 export function middleware(req: NextRequest) {
-  // 1. Apply i18n first (locale routing handled by next-intl).
-  const intlResponse = intlMiddleware(req);
-
-  // 2. Portal routing: rewrite path so each subdomain renders its segment.
   const portal = resolvePortalFromRequest(req);
   const segment = PORTAL_TO_SEGMENT[portal];
 
@@ -18,10 +15,10 @@ export function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     if (!url.pathname.startsWith(`/${segment}`)) {
       url.pathname = `/${segment}${url.pathname === '/' ? '' : url.pathname}`;
-      return NextResponse.rewrite(url, intlResponse);
+      return NextResponse.rewrite(url);
     }
   }
-  return intlResponse;
+  return NextResponse.next();
 }
 
 export const config = {
