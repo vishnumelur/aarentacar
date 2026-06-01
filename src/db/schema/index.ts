@@ -14,3 +14,6 @@ export * from './promo-codes';
 export * from './bookings';
 export * from './booking-addons';
 export * from './booking-events';
+export * from './driver-profiles';
+export * from './driver-pings';
+export * from './booking-assignments';
