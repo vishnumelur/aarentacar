@@ -1,0 +1,38 @@
+{
+  "Brand": {
+    "name": "AA Rent A Car",
+    "tagline": "Experience luxury in every drive."
+  },
+  "Nav": {
+    "home": "Home",
+    "cars": "Cars",
+    "limousines": "Limousines",
+    "myBookings": "My Bookings",
+    "dashboard": "Dashboard",
+    "login": "Log in",
+    "register": "Sign up",
+    "logout": "Log out"
+  },
+  "Auth": {
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Log in to continue.",
+    "email": "Email",
+    "password": "Password",
+    "loginCta": "Log in",
+    "registerTitle": "Create an account",
+    "registerCta": "Sign up",
+    "fullName": "Full name",
+    "phone": "Phone (optional)",
+    "submitting": "Working…",
+    "invalidCredentials": "Invalid email or password.",
+    "emailTaken": "That email is already registered.",
+    "generic": "Something went wrong. Please try again."
+  },
+  "Landing": {
+    "bookingPlaceholder": "Booking widget — built in Plan #4 (Browse & Book)."
+  },
+  "Language": {
+    "switchToArabic": "العربية",
+    "switchToEnglish": "English"
+  }
+}

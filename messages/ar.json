@@ -1,0 +1,38 @@
+{
+  "Brand": {
+    "name": "إيه إيه لتأجير السيارات",
+    "tagline": "اختبر الفخامة في كل رحلة."
+  },
+  "Nav": {
+    "home": "الرئيسية",
+    "cars": "السيارات",
+    "limousines": "ليموزين",
+    "myBookings": "حجوزاتي",
+    "dashboard": "لوحة التحكم",
+    "login": "تسجيل الدخول",
+    "register": "إنشاء حساب",
+    "logout": "تسجيل الخروج"
+  },
+  "Auth": {
+    "loginTitle": "مرحبًا بعودتك",
+    "loginSubtitle": "سجّل الدخول للمتابعة.",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "loginCta": "تسجيل الدخول",
+    "registerTitle": "أنشئ حسابًا",
+    "registerCta": "اشتراك",
+    "fullName": "الاسم الكامل",
+    "phone": "الهاتف (اختياري)",
+    "submitting": "جارٍ المعالجة…",
+    "invalidCredentials": "بريد إلكتروني أو كلمة مرور غير صحيحة.",
+    "emailTaken": "هذا البريد الإلكتروني مسجل بالفعل.",
+    "generic": "حدث خطأ ما. حاول مرة أخرى."
+  },
+  "Landing": {
+    "bookingPlaceholder": "أداة الحجز — قيد البناء في الخطة #4."
+  },
+  "Language": {
+    "switchToArabic": "العربية",
+    "switchToEnglish": "English"
+  }
+}
