@@ -41,10 +41,16 @@ export default async function EditVehiclePage({
       <VehicleForm vehicle={v} types={types} branches={bs} />
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Photos</h2>
-        <PhotoUpload vehicleId={v.id} />
+        {v.primaryPhotoUrl && (
+          <p className="text-xs text-muted-foreground">
+            Current primary photo key: <code className="rounded bg-muted px-1">{v.primaryPhotoUrl}</code>
+          </p>
+        )}
+        <PhotoUpload vehicleId={v.id} hasPrimary={!!v.primaryPhotoUrl} />
         <p className="text-xs text-muted-foreground">
-          After uploading, paste the returned key into the &quot;Primary photo URL&quot; field
-          above and click &quot;Save changes&quot;. (Auto-save will land in a polish commit.)
+          {v.primaryPhotoUrl
+            ? 'New uploads do NOT replace the existing primary photo — paste the new key into "Primary photo URL" above to swap.'
+            : 'First upload will be set as the primary photo automatically.'}
         </p>
       </section>
       <RateCardsEditor vehicleId={v.id} rates={rates} />

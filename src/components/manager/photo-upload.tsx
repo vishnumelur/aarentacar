@@ -1,18 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { setVehiclePrimaryPhoto } from '@/lib/actions/vehicles';
 
 export function PhotoUpload({
   vehicleId,
-  onUploaded,
+  hasPrimary,
 }: {
   vehicleId: string;
-  onUploaded?: (key: string) => void;
+  hasPrimary: boolean;
 }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
-  const [lastKey, setLastKey] = useState<string | null>(null);
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -29,9 +32,8 @@ export function PhotoUpload({
           mimeType: file.type,
         }),
       });
-      if (!presignRes.ok) {
-        throw new Error(`presign_failed_${presignRes.status}`);
-      }
+      if (!presignRes.ok) throw new Error(`presign_failed_${presignRes.status}`);
+
       const { url, key } = (await presignRes.json()) as { url: string; key: string };
       const put = await fetch(url, {
         method: 'PUT',
@@ -39,9 +41,19 @@ export function PhotoUpload({
         body: file,
       });
       if (!put.ok) throw new Error(`upload_failed_${put.status}`);
-      setLastKey(key);
-      onUploaded?.(key);
-      setMsg(`Uploaded: ${key}`);
+
+      // Auto-save as primary if this is the first photo, otherwise just notify.
+      if (!hasPrimary) {
+        start(async () => {
+          const res = await setVehiclePrimaryPhoto({ vehicleId, key });
+          setMsg(res.ok ? `Uploaded and set as primary: ${key}` : `Uploaded but save failed: ${res.error}`);
+          if (res.ok) router.refresh();
+        });
+      } else {
+        setMsg(
+          `Uploaded: ${key}. Existing primary kept — paste this key into "Primary photo URL" to swap.`,
+        );
+      }
     } catch (err: unknown) {
       setMsg(err instanceof Error ? err.message : 'upload_failed');
     } finally {
@@ -49,23 +61,20 @@ export function PhotoUpload({
     }
   }
 
+  const isWorking = busy || pending;
+
   return (
     <div className="flex items-center gap-3">
       <input
         type="file"
         accept="image/jpeg,image/png,image/webp,image/avif"
         onChange={onPick}
-        disabled={busy}
+        disabled={isWorking}
       />
-      <Button type="button" variant="ghost" size="sm" disabled={busy}>
-        {busy ? 'Uploading…' : 'Upload photo'}
+      <Button type="button" variant="ghost" size="sm" disabled={isWorking}>
+        {isWorking ? 'Uploading…' : 'Upload photo'}
       </Button>
       {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
-      {lastKey && (
-        <span className="text-xs">
-          Set this as primary photo: copy <code className="rounded bg-muted px-1">{lastKey}</code>
-        </span>
-      )}
     </div>
   );
 }

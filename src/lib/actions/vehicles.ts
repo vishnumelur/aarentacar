@@ -130,6 +130,23 @@ export async function softDeleteVehicle(formData: FormData): Promise<void> {
   redirect('/manager/fleet');
 }
 
+export async function setVehiclePrimaryPhoto(input: { vehicleId: string; key: string }) {
+  const user = await getCurrentUser();
+  if (!user || !canAccessPortal(user.role, 'manager')) {
+    return { ok: false as const, error: 'forbidden' };
+  }
+  if (!input.vehicleId || !input.key) {
+    return { ok: false as const, error: 'invalid_input' };
+  }
+  await db
+    .update(vehicles)
+    .set({ primaryPhotoUrl: input.key, updatedAt: new Date() })
+    .where(eq(vehicles.id, input.vehicleId));
+  revalidatePath(`/manager/fleet/${input.vehicleId}`);
+  revalidatePath('/manager/fleet');
+  return { ok: true as const };
+}
+
 const rateSchema = z.object({
   vehicleId: z.uuid(),
   rateKind: z.enum(['hourly', 'daily', 'weekly', 'monthly', 'package']),
