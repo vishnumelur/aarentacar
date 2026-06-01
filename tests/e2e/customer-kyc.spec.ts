@@ -40,10 +40,13 @@ test.describe('Customer KYC happy path', () => {
     await page.fill('input[name="dateOfBirth"]', '1990-01-01');
     await page.fill('input[name="nationality"]', 'United Kingdom');
     await page.click('button:has-text("Save profile")');
+    // Wait for the save to commit (the form sets state with useTransition,
+    // so navigating immediately races the server-action insert).
+    await expect(page.getByText('Saved.')).toBeVisible({ timeout: 10_000 });
 
     // 5. Back to /verification — should now show the tourist required-doc slots
     await page.goto('/verification');
-    await expect(page.getByRole('heading', { name: /Passport/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Passport/ })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('heading', { name: /UAE Visa/ })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Driving License \(front\)/ })).toBeVisible();
     await expect(page.getByRole('heading', { name: /Driving License \(back\)/ })).toBeVisible();
