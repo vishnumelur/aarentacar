@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { LanguageToggle } from '@/components/language-toggle';
+import { SearchWidget } from '@/components/public/search-widget';
 
 export default function LandingPage() {
   const t = useTranslations('Brand');
   const tNav = useTranslations('Nav');
-  const tLanding = useTranslations('Landing');
 
   return (
     <main className="min-h-screen">
@@ -24,15 +23,30 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      <section className="mx-auto max-w-5xl px-6 py-24 text-center">
+      <section className="mx-auto max-w-5xl px-6 py-16 text-center">
         <h1 className="text-5xl font-bold tracking-tight">{t('name')}</h1>
         <p className="mt-4 text-xl text-muted-foreground">{t('tagline')}</p>
-        <Card className="mt-12">
-          <CardContent className="p-8 text-muted-foreground">
-            {tLanding('bookingPlaceholder')}
-          </CardContent>
-        </Card>
+        <div className="mt-12 text-left">
+          <SearchWidget />
+        </div>
+      </section>
+
+      <section className="border-t bg-muted/30 px-6 py-12">
+        <div className="mx-auto max-w-5xl grid gap-6 md:grid-cols-3">
+          <Feature title="500+ vehicles" body="Economy to luxury. Plus dedicated limousine fleet." />
+          <Feature title="Delivered anywhere" body="Car drop-off and pickup anywhere in Dubai." />
+          <Feature title="With or without driver" body="Self-drive or chauffeur — your choice." />
+        </div>
       </section>
     </main>
+  );
+}
+
+function Feature({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-6">
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+    </div>
   );
 }
