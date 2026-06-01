@@ -35,6 +35,15 @@ minio-data/
 # coverage / tests
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# typescript build info
+*.tsbuildinfo
+
+# vercel (only if ever used)
+.vercel
 
 # brainstorming session artifacts (visual companion)
 .superpowers/
