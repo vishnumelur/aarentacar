@@ -23,6 +23,24 @@ const envSchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .transform((v) => v === true || v === 'true' || v === '1')
     .default(false),
+  // Web Push / VAPID — optional during boot; required at runtime if push is wanted.
+  // Empty strings (from .env.example placeholders) are coerced to undefined so
+  // the validation on VAPID_SUBJECT doesn't trip in CI / dev. VAPID_SUBJECT is
+  // typically a `mailto:` URI (not a bare email), so we accept either form.
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  VAPID_PRIVATE_KEY: z
+    .preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  VAPID_SUBJECT: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .refine(
+        (s) => s.startsWith('mailto:') || s.startsWith('https://') || /.+@.+\..+/.test(s),
+        { message: 'must be a mailto: URI, https URL, or email' },
+      )
+      .optional(),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;
