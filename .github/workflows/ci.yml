@@ -26,6 +26,8 @@ jobs:
       ENCRYPTION_KEY: ${{ secrets.CI_ENCRYPTION_KEY || 'dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXRlc3Q=' }}
       SESSION_COOKIE_DOMAIN: localhost
       NODE_ENV: test
+      SUPERADMIN_EMAIL: admin@aa-rentacar.com
+      SUPERADMIN_PASSWORD: change-me-on-first-login
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +53,11 @@ jobs:
 
       - name: Unit + integration tests
         run: pnpm test
+
+      - name: Re-seed Super-Admin + inventory after vitest truncated users
+        run: |
+          pnpm db:bootstrap
+          pnpm db:seed-inventory
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
