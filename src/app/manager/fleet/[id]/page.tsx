@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { vehicles, vehicleTypes, vehicleRates, branches } from '@/db/schema';
 import { VehicleForm } from '@/components/manager/vehicle-form';
 import { RateCardsEditor } from '@/components/manager/rate-cards-editor';
+import { PhotoUpload } from '@/components/manager/photo-upload';
 import { Button } from '@/components/ui/button';
 import { softDeleteVehicle } from '@/lib/actions/vehicles';
 
@@ -38,6 +39,14 @@ export default async function EditVehiclePage({
         </form>
       </div>
       <VehicleForm vehicle={v} types={types} branches={bs} />
+      <section className="space-y-3">
+        <h2 className="text-lg font-medium">Photos</h2>
+        <PhotoUpload vehicleId={v.id} />
+        <p className="text-xs text-muted-foreground">
+          After uploading, paste the returned key into the &quot;Primary photo URL&quot; field
+          above and click &quot;Save changes&quot;. (Auto-save will land in a polish commit.)
+        </p>
+      </section>
       <RateCardsEditor vehicleId={v.id} rates={rates} />
     </div>
   );
