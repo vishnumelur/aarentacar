@@ -11,6 +11,7 @@ import {
   Tag,
   BarChart3,
   Settings,
+  Users,
 } from 'lucide-react';
 
 type NavItem = {
@@ -25,6 +26,7 @@ const items: NavItem[] = [
   { href: '/manager/fleet', label: 'Fleet', Icon: CarFront },
   { href: '/manager/types', label: 'Vehicle Types', Icon: Layers },
   { href: '/manager/categories', label: 'Categories', Icon: Tags },
+  { href: '/manager/customers', label: 'Customers', Icon: Users },
   { href: '/manager/drivers', label: 'Drivers', Icon: UserCog },
   { href: '/manager/promos', label: 'Promotions', Icon: Tag },
   { href: '/manager/reports', label: 'Reports', Icon: BarChart3 },
