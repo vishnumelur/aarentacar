@@ -54,10 +54,12 @@ jobs:
       - name: Unit + integration tests
         run: pnpm test
 
-      - name: Re-seed Super-Admin + inventory after vitest truncated users
+      - name: Re-seed Super-Admin + inventory + test users after vitest truncated users
         run: |
           pnpm db:bootstrap
           pnpm db:seed-inventory
+          pnpm db:seed-addons
+          pnpm db:seed-test-users
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
