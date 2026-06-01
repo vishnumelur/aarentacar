@@ -27,6 +27,8 @@
     "db:bootstrap": "tsx scripts/bootstrap.ts",
     "db:seed-inventory": "tsx scripts/seed-inventory.ts",
     "db:seed-addons": "tsx scripts/seed-addons.ts",
+    "db:seed-test-users": "tsx scripts/seed-test-users.ts",
+    "db:seed-all": "pnpm db:bootstrap && pnpm db:seed-inventory && pnpm db:seed-addons && pnpm db:seed-test-users",
     "minio:bootstrap": "tsx scripts/minio-bootstrap.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
