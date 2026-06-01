@@ -11,6 +11,8 @@ import {
   vehicleTypes,
   users,
 } from '@/db/schema';
+import { ApprovalPanel } from '@/components/manager/approval-panel';
+import { DispatchPanel } from '@/components/manager/dispatch-panel';
 
 export default async function ManagerBookingDetailPage({
   params,
@@ -62,6 +64,9 @@ export default async function ManagerBookingDetailPage({
           {booking.status.replace(/_/g, ' ')}
         </span>
       </div>
+
+      {booking.status === 'pending_approval' && <ApprovalPanel bookingId={booking.id} />}
+      {booking.status === 'approved' && <DispatchPanel bookingId={booking.id} />}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border bg-card p-6 space-y-2 text-sm">
@@ -138,7 +143,7 @@ export default async function ManagerBookingDetailPage({
           ))}
         </ul>
         <p className="mt-4 text-xs text-muted-foreground">
-          Approve / reject / dispatch actions land in Plan #5.
+          Status transitions appear in the timeline above. Reassignment + driver acceptance ship in Plan #6.
         </p>
       </section>
     </div>
