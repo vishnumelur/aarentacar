@@ -9,3 +9,8 @@ export * from './vehicles';
 export * from './vehicle-rates';
 export * from './customer-profiles';
 export * from './customer-documents';
+export * from './addons';
+export * from './promo-codes';
+export * from './bookings';
+export * from './booking-addons';
+export * from './booking-events';

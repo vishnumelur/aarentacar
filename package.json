@@ -26,6 +26,7 @@
     "db:studio": "drizzle-kit studio",
     "db:bootstrap": "tsx scripts/bootstrap.ts",
     "db:seed-inventory": "tsx scripts/seed-inventory.ts",
+    "db:seed-addons": "tsx scripts/seed-addons.ts",
     "minio:bootstrap": "tsx scripts/minio-bootstrap.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
