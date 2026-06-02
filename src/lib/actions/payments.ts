@@ -3,10 +3,11 @@
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
-import { payments, bookings, bookingEvents, auditLogs } from '@/db/schema';
+import { payments, bookings, bookingEvents, auditLogs, users } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { canAccessPortal } from '@/lib/auth/roles';
 import { createNotification } from '@/lib/notifications/create';
+import { enqueueEmailSafe } from '@/lib/mail/send';
 
 export type ConfirmBankTransferOutcome =
   | { ok: true }
@@ -90,6 +91,25 @@ export async function confirmBankTransfer(formData: FormData): Promise<ConfirmBa
       });
     } catch (err) {
       console.warn('confirmBankTransfer notification failed', err);
+    }
+
+    // Payment receipt email (Plan #12). Best-effort, off the request path.
+    const [cust] = await tx
+      .select({ email: users.email, fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, booking.customerId))
+      .limit(1);
+    if (cust) {
+      await enqueueEmailSafe({
+        to: cust.email,
+        templateName: 'payment-receipt',
+        locale: 'en',
+        payload: {
+          name: cust.fullName,
+          bookingCode: booking.code,
+          amountAed: payment.amountAed,
+        },
+      });
     }
 
     return { ok: true as const };

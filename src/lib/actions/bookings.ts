@@ -22,6 +22,7 @@ import { computeBestRate, type Rate, type RatePick } from '@/lib/pricing/compute
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { nextBookingCode } from '@/lib/bookings/code';
 import { validateAndApplyPromo, type PromoApplyError } from '@/lib/promos/apply';
+import { enqueueEmailSafe } from '@/lib/mail/send';
 
 const searchSchema = z.object({
   categorySlug: z.enum(['car', 'limousine']).optional(),
@@ -376,7 +377,7 @@ export async function createBooking(
   const returnAt = new Date(parsed.data.returnAt);
   if (returnAt <= pickupAt) return { ok: false, error: 'invalid_input' };
 
-  return await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     // Vehicle + type + category
     const [v] = await tx
       .select()
@@ -587,7 +588,24 @@ export async function createBooking(
 
     revalidatePath('/my-bookings');
     revalidatePath('/manager/bookings');
-    return { ok: true as const, code };
+    return { ok: true as const, code, pickupAt, totalAed };
   });
+
+  // Booking confirmation email (Plan #12). Best-effort, off the request path.
+  if (result.ok) {
+    await enqueueEmailSafe({
+      to: user.email,
+      templateName: 'booking-confirmed',
+      locale: 'en',
+      payload: {
+        name: user.fullName,
+        bookingCode: result.code,
+        pickupAt: result.pickupAt.toISOString(),
+        totalAed: result.totalAed,
+      },
+    });
+    return { ok: true as const, code: result.code };
+  }
+  return result as CreateBookingOutcome;
 }
 

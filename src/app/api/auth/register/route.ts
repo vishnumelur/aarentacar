@@ -6,6 +6,7 @@ import { users } from '@/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
 import { buildSessionCookie } from '@/lib/auth/cookies';
+import { enqueueEmailSafe } from '@/lib/mail/send';
 import { env } from '@/lib/env';
 
 const bodySchema = z.object({
@@ -44,6 +45,14 @@ export async function POST(req: Request): Promise<NextResponse> {
   if (!user) {
     return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
   }
+
+  // Welcome email (Plan #12). Best-effort — never blocks signup.
+  await enqueueEmailSafe({
+    to: user.email,
+    templateName: 'welcome',
+    locale: parsed.preferredLanguage,
+    payload: { name: user.fullName },
+  });
 
   const { token, expiresAt } = await createSession(db, {
     userId: user.id,

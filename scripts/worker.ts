@@ -33,10 +33,14 @@ async function main(): Promise<void> {
     driverPings,
     auditLogs,
   } = await import('@/db/schema');
+  const { mailEvents } = await import('@/db/schema');
   const { getBoss, JOB_NAMES } = await import('@/lib/jobs/queue');
   const { runDocumentExpiry, runDepositRelease, runDriverPingsPrune } = await import(
     '@/lib/jobs/handlers'
   );
+  const { runSendEmail } = await import('@/lib/jobs/handlers/send-email');
+  const { renderTemplate, renderTemplateText, subjectFor } = await import('@/lib/mail/render');
+  const { getTransport } = await import('@/lib/mail/transport');
   const { systemReleaseDeposit } = await import('@/lib/actions/deposits');
 
   const audit = async (action: string, payload: Record<string, unknown>): Promise<void> => {
@@ -153,6 +157,39 @@ async function main(): Promise<void> {
         reason: err instanceof Error ? err.message : 'unknown',
       });
       throw err;
+    }
+  });
+
+  // ---- send-email (Plan #12) -------------------------------------------
+  await boss.work(JOB_NAMES.sendEmail, async (jobs) => {
+    const list = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of list) {
+      const data = job.data as import('@/lib/mail/send').SendEmailJob;
+      await runSendEmail(data, {
+        render: (template, locale, payload) =>
+          renderTemplate(template, locale, payload as never),
+        renderText: (template, locale, payload) =>
+          renderTemplateText(template, locale, payload as never),
+        subjectFor: (template, locale, payload) =>
+          subjectFor(template, locale, payload as never),
+        getTransport,
+        recordEvent: async (event) => {
+          try {
+            await db.insert(mailEvents).values({
+              toAddress: event.toAddress,
+              template: event.template,
+              locale: event.locale,
+              status: event.status,
+              messageId: event.messageId ?? null,
+              detail: event.detail ?? null,
+              payload: event.payload ?? null,
+            });
+          } catch (err) {
+            console.warn('[send-email] mail_events insert failed', err);
+          }
+        },
+      });
+      console.warn(`[send-email] sent ${data.templateName} to ${data.to}`);
     }
   });
 

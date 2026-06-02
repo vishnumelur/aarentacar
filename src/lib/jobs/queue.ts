@@ -14,7 +14,7 @@ export const JOB_NAMES = {
   depositRelease: 'deposit-release',
   driverPingsPrune: 'driver-pings-prune',
   dailyPgDump: 'daily-pg-dump',
-  // send-email lands in Plan #12 — registration list stays easy to extend.
+  sendEmail: 'send-email',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

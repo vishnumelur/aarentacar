@@ -1,0 +1,4 @@
+# OpenDKIM SigningTable (Plan #12).
+# Any From: address at aa-rentacar.com is signed with the `default` selector key
+# defined in KeyTable. `refile:` (used in opendkim.conf) enables regex matching.
+*@aa-rentacar.com default._domainkey.aa-rentacar.com

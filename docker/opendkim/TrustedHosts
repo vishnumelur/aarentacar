@@ -1,0 +1,12 @@
+# OpenDKIM TrustedHosts (Plan #12).
+# Hosts whose mail OpenDKIM will sign (InternalHosts) and not verify
+# (ExternalIgnoreList). Covers localhost + the Docker `internal` network ranges
+# where Postfix submits mail from.
+127.0.0.1
+::1
+localhost
+postfix
+172.16.0.0/12
+192.168.0.0/16
+10.0.0.0/8
+aa-rentacar.com

@@ -10,8 +10,10 @@ import {
   bookingEvents,
   damageInspections,
   driverProfiles,
+  users,
 } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
+import { enqueueEmailSafe } from '@/lib/mail/send';
 
 const schema = z.object({
   assignmentId: z.uuid(),
@@ -124,6 +126,25 @@ export async function recordReturn(
   });
 
   // Manager-side deposit settlement is Plan #7's territory.
+
+  // Confirm the return to the customer by email (Plan #12). Best-effort.
+  const [cust] = await db
+    .select({ email: users.email, fullName: users.fullName })
+    .from(users)
+    .where(eq(users.id, booking.customerId))
+    .limit(1);
+  if (cust) {
+    await enqueueEmailSafe({
+      to: cust.email,
+      templateName: 'return-reminder',
+      locale: 'en',
+      payload: {
+        name: cust.fullName,
+        bookingCode: booking.code,
+        returnAt: new Date(booking.returnAt).toISOString(),
+      },
+    });
+  }
 
   revalidatePath('/driver');
   revalidatePath(`/driver/jobs/${parsed.data.assignmentId}`);

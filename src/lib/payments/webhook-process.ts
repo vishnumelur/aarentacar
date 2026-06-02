@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import type { db as Db } from '@/db';
 import { db } from '@/db';
-import { bookings, bookingEvents, payments, refunds, webhookEvents } from '@/db/schema';
+import { bookings, bookingEvents, payments, refunds, webhookEvents, users } from '@/db/schema';
+import { enqueueEmailSafe } from '@/lib/mail/send';
 
 type Tx = Parameters<Parameters<typeof Db.transaction>[0]>[0] | typeof db;
 
@@ -28,13 +29,13 @@ export async function markPaymentSucceeded(
   gatewayRef: string,
   raw: unknown,
 ): Promise<void> {
-  await db.transaction(async (tx: Tx) => {
+  const receipt = await db.transaction(async (tx: Tx) => {
     const [payment] = await tx
       .select()
       .from(payments)
       .where(eq(payments.gatewayRef, gatewayRef))
       .limit(1);
-    if (!payment) return;
+    if (!payment) return null;
 
     await tx
       .update(payments)
@@ -56,8 +57,37 @@ export async function markPaymentSucceeded(
         kind: 'payment_succeeded',
         payload: { method: payment.method, amountAed: payment.amountAed },
       });
+
+      const [cust] = await tx
+        .select({ email: users.email, fullName: users.fullName })
+        .from(users)
+        .where(eq(users.id, booking.customerId))
+        .limit(1);
+      if (cust) {
+        return {
+          email: cust.email,
+          name: cust.fullName,
+          bookingCode: booking.code,
+          amountAed: payment.amountAed,
+        };
+      }
     }
+    return null;
   });
+
+  // Payment receipt email (Plan #12). Best-effort, outside the tx.
+  if (receipt) {
+    await enqueueEmailSafe({
+      to: receipt.email,
+      templateName: 'payment-receipt',
+      locale: 'en',
+      payload: {
+        name: receipt.name,
+        bookingCode: receipt.bookingCode,
+        amountAed: receipt.amountAed,
+      },
+    });
+  }
 }
 
 /** Mark a payment failed by gateway ref. Booking stays `pending_payment`. */

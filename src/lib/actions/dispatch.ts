@@ -15,6 +15,7 @@ import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { userCanAgent } from '@/lib/auth/agent-guard';
 import { haversineKm } from '@/lib/geo/distance';
 import { createNotification } from '@/lib/notifications/create';
+import { enqueueEmailSafe } from '@/lib/mail/send';
 
 export type ApproveOutcome =
   | { ok: true }
@@ -350,6 +351,41 @@ export async function dispatchDriver(input: {
       }
     } catch (err) {
       console.warn('dispatch push fire failed', err);
+    }
+
+    // Notify the customer by email that a driver is on the way (Plan #12).
+    try {
+      const [row] = await db
+        .select({
+          code: bookings.code,
+          pickupAt: bookings.pickupAt,
+          custEmail: users.email,
+          custName: users.fullName,
+        })
+        .from(bookings)
+        .innerJoin(users, eq(users.id, bookings.customerId))
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+      const [driver] = await db
+        .select({ name: users.fullName })
+        .from(users)
+        .where(eq(users.id, input.driverUserId))
+        .limit(1);
+      if (row) {
+        await enqueueEmailSafe({
+          to: row.custEmail,
+          templateName: 'driver-dispatched',
+          locale: 'en',
+          payload: {
+            name: row.custName,
+            bookingCode: row.code,
+            driverName: driver?.name ?? 'Your driver',
+            pickupAt: new Date(row.pickupAt).toISOString(),
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('dispatch email enqueue failed', err);
     }
   }
 

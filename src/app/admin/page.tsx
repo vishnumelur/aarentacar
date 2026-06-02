@@ -1,6 +1,7 @@
 import { AdminPage } from '@/components/admin/admin-page';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getSystemHealth } from '@/lib/admin/system-health';
+import { getMailStats } from '@/lib/mail/stats';
 import { HealthActions } from '@/components/admin/health-actions';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +17,7 @@ function StatusDot({ ok }: { ok: boolean }) {
 
 export default async function AdminHome() {
   const health = await getSystemHealth();
+  const mail = await getMailStats(24);
 
   return (
     <AdminPage title="System Health">
@@ -58,6 +60,19 @@ export default async function AdminHome() {
             <StatusDot ok={health.minio.ok} />
           </CardHeader>
           <CardContent className="text-muted-foreground text-sm">{health.minio.note}</CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-2">
+            <CardTitle className="text-base">Mail (24h)</CardTitle>
+            <StatusDot ok={mail.failed === 0 && mail.bounceRate < 0.05} />
+          </CardHeader>
+          <CardContent className="text-muted-foreground text-sm">
+            <div>sent: {mail.sent}</div>
+            <div>failed: {mail.failed}</div>
+            <div>bounced: {mail.bounced}</div>
+            <div>bounce rate: {(mail.bounceRate * 100).toFixed(1)}%</div>
+          </CardContent>
         </Card>
 
         <Card>

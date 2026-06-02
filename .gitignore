@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# DKIM private keys (Plan #12) — generated per-host, never committed
+docker/opendkim/keys/
+
 # node / next
 node_modules/
 .next/

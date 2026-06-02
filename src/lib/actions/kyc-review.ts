@@ -6,6 +6,19 @@ import { db } from '@/db';
 import { customerDocuments, users, auditLogs, customerProfiles } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { userCanAgent } from '@/lib/auth/agent-guard';
+import { enqueueEmailSafe } from '@/lib/mail/send';
+
+/** Best-effort lookup of a customer's email + name for transactional mail. */
+async function customerContact(
+  customerId: string,
+): Promise<{ email: string; name: string } | null> {
+  const [u] = await db
+    .select({ email: users.email, fullName: users.fullName })
+    .from(users)
+    .where(eq(users.id, customerId))
+    .limit(1);
+  return u ? { email: u.email, name: u.fullName } : null;
+}
 
 async function logAudit(actorId: string, action: string, targetId: string, payload: object) {
   await db.insert(auditLogs).values({
@@ -92,6 +105,18 @@ export async function approveDocument(formData: FormData) {
 
   await logAudit(user.id, 'document.approved', id, { type: doc.type });
   await recomputeCustomerStatus(doc.customerId);
+
+  // Email the customer (Plan #12). Best-effort; never fails the approval.
+  const contact = await customerContact(doc.customerId);
+  if (contact) {
+    await enqueueEmailSafe({
+      to: contact.email,
+      templateName: 'kyc-approved',
+      locale: 'en',
+      payload: { name: contact.name },
+    });
+  }
+
   revalidatePath(`/manager/customers/${doc.customerId}`);
   revalidatePath('/manager/customers');
   return { ok: true as const };
@@ -127,6 +152,18 @@ export async function rejectDocument(formData: FormData) {
 
   await logAudit(user.id, 'document.rejected', id, { type: doc.type, note });
   await recomputeCustomerStatus(doc.customerId);
+
+  // Email the customer with the rejection reason (Plan #12). Best-effort.
+  const contact = await customerContact(doc.customerId);
+  if (contact) {
+    await enqueueEmailSafe({
+      to: contact.email,
+      templateName: 'kyc-rejected',
+      locale: 'en',
+      payload: { name: contact.name, reason: note },
+    });
+  }
+
   revalidatePath(`/manager/customers/${doc.customerId}`);
   revalidatePath('/manager/customers');
   return { ok: true as const };

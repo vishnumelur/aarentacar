@@ -29,3 +29,4 @@ export * from './agent-permissions';
 export * from './notifications';
 export * from './feature-flags';
 export * from './totp-secrets';
+export * from './mail-events';

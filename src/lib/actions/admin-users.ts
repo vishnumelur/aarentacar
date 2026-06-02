@@ -8,6 +8,7 @@ import { users, auditLogs } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { destroyAllSessionsForUser } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
+import { enqueueEmailSafe } from '@/lib/mail/send';
 import type { Role } from '@/lib/auth/roles';
 
 const ROLES: Role[] = ['customer', 'driver', 'agent', 'manager', 'superadmin'];
@@ -115,6 +116,17 @@ export async function resetUserPassword(formData: FormData): Promise<ResetPasswo
     targetType: 'user',
     targetId: userId,
   });
+
+  // Email the temporary password to the user (Plan #12). Best-effort — the
+  // admin still sees it once in the UI as a fallback. verify-on-deploy: swap to
+  // a one-time magic-link reset once the mail server is live & warmed.
+  await enqueueEmailSafe({
+    to: target.email,
+    templateName: 'password-reset',
+    locale: 'en',
+    payload: { name: target.fullName, tempPassword },
+  });
+
   revalidatePath(`/admin/users/${userId}`);
   return { ok: true, tempPassword };
 }

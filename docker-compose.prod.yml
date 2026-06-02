@@ -1,0 +1,50 @@
+# Production mail-stack service definitions (Plan #12, Task 3).
+#
+# These are the Postfix + OpenDKIM + ClamAV services per the plan. The FULL
+# production compose (app, worker, postgres, minio, reverse proxy, TLS) is
+# assembled in Plan #13 — this file holds the mail block so Plan #13 can include
+# / merge it and so the definitions are reviewable now.
+#
+# Intentionally separate from docker-compose.dev.yml: the dev DB/app/worker must
+# NOT depend on postfix. Bring the mail stack up on the production host with:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# verify-on-deploy: building + running these requires the production VPS with
+# the DKIM key generated (scripts/dkim-keygen.sh) and DNS published
+# (docs/mail-setup.md). They are not built or run in CI.
+
+services:
+  postfix:
+    build: ./docker/postfix
+    restart: unless-stopped
+    hostname: mail.aa-rentacar.com
+    networks: [internal]
+    volumes:
+      - postfix-spool:/var/spool/postfix
+    depends_on:
+      - opendkim
+    # No `ports:` — internal relay only, reachable as postfix:25 on the network.
+
+  opendkim:
+    build: ./docker/opendkim
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      # DKIM private key generated once via scripts/dkim-keygen.sh (gitignored).
+      - ./docker/opendkim/keys:/etc/opendkim/keys:ro
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - clamav-db:/var/lib/clamav
+    # ClamAV is wired for upload scanning in Plan #13's production-deploy plan.
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postfix-spool:
+  clamav-db:

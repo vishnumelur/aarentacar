@@ -1,0 +1,44 @@
+# Postfix main.cf — AA Rent A Car self-hosted relay (Plan #12).
+# verify-on-deploy: tune hostname/IP to the production VPS before going live.
+
+# Identity. mydomain/myhostname must match the PTR record set in Hetzner and the
+# A record for mail.aa-rentacar.com (see docs/mail-setup.md).
+myhostname = mail.aa-rentacar.com
+mydomain = aa-rentacar.com
+myorigin = $mydomain
+
+# This is a send-only relay for transactional mail. Inbound mail is handled by
+# Cloudflare Email Routing (Task 5), so we do NOT accept inbound delivery here.
+inet_interfaces = all
+inet_protocols = ipv4
+mydestination =
+
+# Only the internal Docker network may submit mail. The app/worker connect from
+# the compose `internal` network; nothing is exposed to the host or internet.
+mynetworks = 127.0.0.0/8 [::1]/128 172.16.0.0/12 192.168.0.0/16 10.0.0.0/8
+smtpd_recipient_restrictions = permit_mynetworks, reject_unauth_destination
+
+# Direct-to-MX delivery (no upstream smarthost). For a managed-relay fallback
+# (Task 11) the app switches relays at the nodemailer layer, not here.
+relayhost =
+
+# --- OpenDKIM milter integration (Task 2) -------------------------------------
+# Sign all outbound mail via the opendkim service listening on opendkim:8891.
+milter_default_action = accept
+milter_protocol = 6
+smtpd_milters = inet:opendkim:8891
+non_smtpd_milters = inet:opendkim:8891
+
+# TLS for outbound delivery to recipient MXes (opportunistic).
+smtp_tls_security_level = may
+smtp_tls_loglevel = 1
+
+# Size + queue hygiene.
+message_size_limit = 26214400
+maximal_queue_lifetime = 1d
+bounce_queue_lifetime = 1d
+
+# Log to stdout so `docker compose logs postfix` shows status=sent/bounced.
+maillog_file = /dev/stdout
+
+compatibility_level = 3.6
