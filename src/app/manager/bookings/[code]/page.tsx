@@ -205,7 +205,7 @@ export default async function ManagerBookingDetailPage({
           ))}
         </ul>
         <p className="mt-4 text-xs text-muted-foreground">
-          Status transitions appear in the timeline above. Reassignment + driver acceptance ship in Plan #6.
+          Status transitions appear in the timeline above, including driver acceptance and handover events.
         </p>
       </section>
     </div>

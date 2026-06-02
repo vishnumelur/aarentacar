@@ -171,7 +171,7 @@ export default async function DriverJobDetailPage({
 
         {row.assignmentStatus === 'accepted' && row.bookingStatus === 'completed' && (
           <div className="rounded-md bg-green-100 p-3 text-sm text-green-900">
-            Job complete. Deposit settlement happens in the manager portal (Plan #7).
+            Job complete. Any deposit settlement is handled by the manager.
           </div>
         )}
 

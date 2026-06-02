@@ -10,6 +10,22 @@
 
 export type RateKind = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'package';
 
+/**
+ * Singular, human-readable label for a rate unit (e.g. "day", "week").
+ * Do NOT derive this by stripping "ly" — "daily" → "dai" is wrong.
+ */
+const RATE_UNIT_LABEL: Record<RateKind, string> = {
+  hourly: 'hour',
+  daily: 'day',
+  weekly: 'week',
+  monthly: 'month',
+  package: 'package',
+};
+
+export function rateUnitLabel(unit: RateKind): string {
+  return RATE_UNIT_LABEL[unit] ?? unit;
+}
+
 export interface Rate {
   rateKind: RateKind;
   priceAed: number;

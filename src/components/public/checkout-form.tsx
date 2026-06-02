@@ -147,7 +147,7 @@ export function CheckoutForm({ vehicleId, pickupAt, returnAt, rentalKind, addonI
           <span>AED {effectiveTotal.toLocaleString()}</span>
         </div>
         <div className="mt-2 text-xs text-muted-foreground">
-          Payment integration ships in Plan #7. For now the booking lands in &quot;pending payment&quot; and is visible to the manager for processing.
+          After you place the booking you&apos;ll choose how to pay (card, Tabby, cash on delivery, or bank transfer). Your booking is held as &quot;pending payment&quot; until then.
         </div>
       </div>
 

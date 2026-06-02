@@ -53,3 +53,7 @@ playwright/.cache/
 
 # user-level claude harness state
 .claude/
+
+# Playwright MCP demo artifacts
+.playwright-mcp/
+demo-*.png

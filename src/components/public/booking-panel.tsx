@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { Addon } from '@/db/schema';
 import { Button } from '@/components/ui/button';
 import { priceQuote, type PriceQuote } from '@/lib/actions/bookings';
+import { rateUnitLabel } from '@/lib/pricing/compute-rate';
 
 interface Props {
   vehicleId: string;
@@ -134,7 +135,7 @@ export function BookingPanel({ vehicleId, pickupAt, returnAt, addons }: Props) {
               <span>
                 {quote.pick.unit === 'package'
                   ? `Package: ${quote.pick.packageName ?? '—'}`
-                  : `${quote.pick.quantity} × ${quote.pick.unit.replace(/ly$/, '')}`}
+                  : `${quote.pick.quantity} × ${rateUnitLabel(quote.pick.unit)}`}
               </span>
               <span>AED {quote.subtotalAed.toLocaleString()}</span>
             </div>

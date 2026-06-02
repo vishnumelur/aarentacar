@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { searchVehicles } from '@/lib/actions/bookings';
+import { rateUnitLabel } from '@/lib/pricing/compute-rate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -112,7 +113,7 @@ export default async function CarsPage({ searchParams }: { searchParams: Promise
                 </div>
                 <div className="pt-2">
                   <div className="text-xs text-muted-foreground">
-                    From AED {Math.round(r.pick.totalAed / Math.max(1, r.pick.quantity)).toLocaleString()} / {r.pick.unit === 'package' ? 'package' : r.pick.unit.replace(/ly$/, '')}
+                    From AED {Math.round(r.pick.totalAed / Math.max(1, r.pick.quantity)).toLocaleString()} / {rateUnitLabel(r.pick.unit)}
                   </div>
                   <div className="text-2xl font-semibold">
                     AED {r.pick.totalAed.toLocaleString()}
