@@ -8,6 +8,7 @@ import { db } from '@/db';
 import { vehicles, vehicleRates } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { canAccessPortal } from '@/lib/auth/roles';
+import { userCanAgent } from '@/lib/auth/agent-guard';
 
 const vehicleBase = z.object({
   typeId: z.uuid(),
@@ -158,7 +159,7 @@ const rateSchema = z.object({
 
 export async function createRate(formData: FormData) {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'edit_pricing'))) {
     return { ok: false as const, error: 'forbidden' };
   }
   const parsed = rateSchema.safeParse(Object.fromEntries(formData));
@@ -182,7 +183,7 @@ export async function createRate(formData: FormData) {
 // <form action={deleteRate}>.
 export async function deleteRate(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'edit_pricing'))) {
     throw new Error('forbidden');
   }
   const id = formData.get('id');
@@ -203,7 +204,7 @@ const bulkPriceSchema = z.object({
 
 export async function bulkPriceUpdate(input: z.infer<typeof bulkPriceSchema>) {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'edit_pricing'))) {
     return { ok: false as const, error: 'forbidden' };
   }
   const parsed = bulkPriceSchema.safeParse(input);

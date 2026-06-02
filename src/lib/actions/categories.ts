@@ -7,6 +7,7 @@ import { db } from '@/db';
 import { vehicleCategories, vehicleTypes } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { canAccessPortal } from '@/lib/auth/roles';
+import { userCanAgent } from '@/lib/auth/agent-guard';
 
 const updateCategorySchema = z.object({
   id: z.uuid(),
@@ -17,7 +18,7 @@ const updateCategorySchema = z.object({
 
 export async function updateCategory(formData: FormData) {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'edit_pricing'))) {
     return { ok: false as const, error: 'forbidden' };
   }
   const parsed = updateCategorySchema.safeParse(Object.fromEntries(formData));

@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { customerDocuments, users, auditLogs, customerProfiles } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
-import { canAccessPortal } from '@/lib/auth/roles';
+import { userCanAgent } from '@/lib/auth/agent-guard';
 
 async function logAudit(actorId: string, action: string, targetId: string, payload: object) {
   await db.insert(auditLogs).values({
@@ -67,7 +67,7 @@ async function recomputeCustomerStatus(customerId: string): Promise<void> {
 
 export async function approveDocument(formData: FormData) {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'review_kyc'))) {
     return { ok: false as const, error: 'forbidden' };
   }
   const id = String(formData.get('id') ?? '');
@@ -99,7 +99,7 @@ export async function approveDocument(formData: FormData) {
 
 export async function rejectDocument(formData: FormData) {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'review_kyc'))) {
     return { ok: false as const, error: 'forbidden' };
   }
   const id = String(formData.get('id') ?? '');

@@ -12,8 +12,9 @@ import {
   users,
 } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
-import { canAccessPortal } from '@/lib/auth/roles';
+import { userCanAgent } from '@/lib/auth/agent-guard';
 import { haversineKm } from '@/lib/geo/distance';
+import { createNotification } from '@/lib/notifications/create';
 
 export type ApproveOutcome =
   | { ok: true }
@@ -21,7 +22,7 @@ export type ApproveOutcome =
 
 export async function approveBooking(formData: FormData): Promise<ApproveOutcome> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'approve_bookings'))) {
     return { ok: false, error: 'forbidden' };
   }
   const id = String(formData.get('id') ?? '');
@@ -54,6 +55,20 @@ export async function approveBooking(formData: FormData): Promise<ApproveOutcome
       payload: { code: booking.code },
     });
 
+    // In-app inbox notification for the customer. Best-effort.
+    // TODO(Plan #11): move to pg-boss async enqueue.
+    try {
+      await createNotification({
+        userId: booking.customerId,
+        kind: 'booking_approved',
+        title: 'Your booking is approved',
+        body: `Booking ${booking.code} has been approved.`,
+        payload: { code: booking.code, bookingId: id },
+      });
+    } catch (err) {
+      console.warn('approveBooking notification failed', err);
+    }
+
     revalidatePath(`/manager/bookings/${booking.code}`);
     revalidatePath('/manager/bookings');
     revalidatePath(`/my-bookings/${booking.code}`);
@@ -75,7 +90,7 @@ export type RejectOutcome =
 
 export async function rejectBooking(formData: FormData): Promise<RejectOutcome> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'approve_bookings'))) {
     return { ok: false, error: 'forbidden' };
   }
   const id = String(formData.get('id') ?? '');
@@ -134,7 +149,7 @@ export type SuggestOutcome =
 
 export async function suggestDrivers(input: { bookingId: string }): Promise<SuggestOutcome> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'manage_drivers'))) {
     return { ok: false, error: 'forbidden' };
   }
   if (!input.bookingId) return { ok: false, error: 'invalid_input' };
@@ -229,7 +244,7 @@ export async function dispatchDriver(input: {
   driverUserId: string;
 }): Promise<DispatchOutcome> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  if (!user || !(await userCanAgent(user, 'manage_drivers'))) {
     return { ok: false, error: 'forbidden' };
   }
   if (!input.bookingId || !input.driverUserId) {
@@ -323,6 +338,14 @@ export async function dispatchDriver(input: {
           title: 'New job assigned',
           body: `${bk.code} · Pickup at ${bk.address} on ${when}`,
           url: `/driver/jobs/${result.assignmentId}`,
+        });
+        // In-app inbox notification too. TODO(Plan #11): move to pg-boss.
+        await createNotification({
+          userId: input.driverUserId,
+          kind: 'job_assigned',
+          title: 'New job assigned',
+          body: `${bk.code} · Pickup at ${bk.address} on ${when}`,
+          payload: { code: bk.code, assignmentId: result.assignmentId },
         });
       }
     } catch (err) {

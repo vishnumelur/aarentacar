@@ -8,7 +8,7 @@ import { db } from '@/db';
 import { users, driverProfiles, auditLogs } from '@/db/schema';
 import { hashPassword } from '@/lib/auth/password';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
-import { canAccessPortal } from '@/lib/auth/roles';
+import { userCanAgent } from '@/lib/auth/agent-guard';
 
 const createSchema = z.object({
   email: z.email().transform((s) => s.toLowerCase().trim()),
@@ -25,7 +25,7 @@ export type CreateDriverOutcome =
 
 export async function createDriver(formData: FormData): Promise<CreateDriverOutcome> {
   const me = await getCurrentUser();
-  if (!me || !canAccessPortal(me.role, 'manager')) {
+  if (!me || !(await userCanAgent(me, 'manage_drivers'))) {
     return { ok: false, error: 'forbidden' };
   }
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
@@ -90,7 +90,7 @@ export type UpdateDriverOutcome =
 
 export async function updateDriver(formData: FormData): Promise<UpdateDriverOutcome> {
   const me = await getCurrentUser();
-  if (!me || !canAccessPortal(me.role, 'manager')) {
+  if (!me || !(await userCanAgent(me, 'manage_drivers'))) {
     return { ok: false, error: 'forbidden' };
   }
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
@@ -133,7 +133,7 @@ const toggleSchema = z.object({
 
 export async function setDriverStatus(formData: FormData): Promise<UpdateDriverOutcome> {
   const me = await getCurrentUser();
-  if (!me || !canAccessPortal(me.role, 'manager')) {
+  if (!me || !(await userCanAgent(me, 'manage_drivers'))) {
     return { ok: false, error: 'forbidden' };
   }
   const parsed = toggleSchema.safeParse(Object.fromEntries(formData));

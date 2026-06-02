@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import {
@@ -15,11 +15,13 @@ import {
   addons as addonsTable,
   customerProfiles,
   customerDocuments,
+  promoCodes,
 } from '@/db/schema';
 import { hasOverlap, isActiveBookingStatus } from '@/lib/pricing/availability';
 import { computeBestRate, type Rate, type RatePick } from '@/lib/pricing/compute-rate';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { nextBookingCode } from '@/lib/bookings/code';
+import { validateAndApplyPromo, type PromoApplyError } from '@/lib/promos/apply';
 
 const searchSchema = z.object({
   categorySlug: z.enum(['car', 'limousine']).optional(),
@@ -185,6 +187,7 @@ const quoteSchema = z.object({
   pickupAt: z.iso.datetime(),
   returnAt: z.iso.datetime(),
   addonIds: z.array(z.uuid()).max(20).default([]),
+  promoCode: z.string().trim().min(1).max(40).optional(),
 });
 
 export interface QuoteAddon {
@@ -200,6 +203,9 @@ export interface PriceQuote {
   pick: RatePick;
   subtotalAed: number;
   addonsAed: number;
+  discountAed: number;
+  appliedPromoCode: string | null;
+  promoError: PromoApplyError | null;
   depositAed: number;
   totalAed: number;
   addons: QuoteAddon[];
@@ -209,6 +215,31 @@ export interface PriceQuote {
 export type PriceQuoteOutcome =
   | { ok: true; quote: PriceQuote }
   | { ok: false; error: 'vehicle_not_found' | 'no_rate_available' | 'invalid_input' };
+
+/**
+ * Look up + validate a promo code against a subtotal/category. Pure-helper
+ * driven; returns the discount and (on failure) an error reason so the quote
+ * UI can show why a code didn't apply without blocking the quote.
+ */
+async function resolvePromo(
+  code: string | undefined,
+  subtotalAed: number,
+  categoryId: string,
+  now: Date,
+): Promise<{ discountAed: number; appliedPromoCode: string | null; promoError: PromoApplyError | null }> {
+  if (!code) return { discountAed: 0, appliedPromoCode: null, promoError: null };
+  const normalized = code.trim().toUpperCase();
+  const [row] = await db
+    .select()
+    .from(promoCodes)
+    .where(eq(promoCodes.code, normalized))
+    .limit(1);
+  const result = validateAndApplyPromo(row ?? null, { subtotalAed, categoryId, now });
+  if (!result.ok) {
+    return { discountAed: 0, appliedPromoCode: null, promoError: result.error };
+  }
+  return { discountAed: result.discountAed, appliedPromoCode: result.code, promoError: null };
+}
 
 export async function priceQuote(input: z.infer<typeof quoteSchema>): Promise<PriceQuoteOutcome> {
   const parsed = quoteSchema.safeParse(input);
@@ -268,7 +299,13 @@ export async function priceQuote(input: z.infer<typeof quoteSchema>): Promise<Pr
   const subtotalAed = pick.totalAed;
   const addonsAed = addons.reduce((sum, a) => sum + a.lineTotalAed, 0);
   const depositAed = cat.defaultDepositAed;
-  const totalAed = subtotalAed + addonsAed;
+  const { discountAed, appliedPromoCode, promoError } = await resolvePromo(
+    parsed.data.promoCode,
+    subtotalAed,
+    cat.id,
+    new Date(),
+  );
+  const totalAed = Math.max(0, subtotalAed + addonsAed - discountAed);
 
   return {
     ok: true,
@@ -276,6 +313,9 @@ export async function priceQuote(input: z.infer<typeof quoteSchema>): Promise<Pr
       pick,
       subtotalAed,
       addonsAed,
+      discountAed,
+      appliedPromoCode,
+      promoError,
       depositAed,
       totalAed,
       addons,
@@ -293,6 +333,7 @@ const createBookingSchema = z.object({
   rentalKind: z.enum(['self_drive', 'chauffeur']),
   addonIds: z.array(z.uuid()).max(20).default([]),
   pickupAddress: z.string().min(2).max(500),
+  promoCode: z.string().trim().min(1).max(40).optional(),
 });
 
 export type CreateBookingOutcome =
@@ -454,7 +495,45 @@ export async function createBooking(
 
     const subtotalAed = pick.totalAed;
     const depositAed = cat.defaultDepositAed;
-    const totalAed = subtotalAed + addonsAed;
+
+    // Promo: validate against the live row, then atomically reserve a use.
+    // The conditional UPDATE guards against races (active flips off /
+    // max_uses reached between validate and reserve); if zero rows are
+    // updated, we silently drop the discount.
+    let discountAed = 0;
+    let appliedPromoCode: string | null = null;
+    if (parsed.data.promoCode) {
+      const normalized = parsed.data.promoCode.trim().toUpperCase();
+      const [promo] = await tx
+        .select()
+        .from(promoCodes)
+        .where(eq(promoCodes.code, normalized))
+        .limit(1);
+      const result = validateAndApplyPromo(promo ?? null, {
+        subtotalAed,
+        categoryId: cat.id,
+        now: new Date(),
+      });
+      if (result.ok) {
+        const reserved = await tx
+          .update(promoCodes)
+          .set({ usedCount: sql`${promoCodes.usedCount} + 1` })
+          .where(
+            and(
+              eq(promoCodes.code, normalized),
+              eq(promoCodes.active, true),
+              sql`(${promoCodes.maxUses} IS NULL OR ${promoCodes.usedCount} < ${promoCodes.maxUses})`,
+            ),
+          )
+          .returning({ id: promoCodes.id });
+        if (reserved.length > 0) {
+          discountAed = result.discountAed;
+          appliedPromoCode = result.code;
+        }
+      }
+    }
+
+    const totalAed = Math.max(0, subtotalAed + addonsAed - discountAed);
 
     const code = await nextBookingCode(tx);
 
@@ -471,9 +550,10 @@ export async function createBooking(
         status: 'pending_payment',
         subtotalAed,
         addonsAed,
-        discountAed: 0,
+        discountAed,
         depositAed,
         totalAed,
+        appliedPromoCode,
       })
       .returning({ id: bookings.id });
     if (!booking) {

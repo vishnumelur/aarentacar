@@ -5,7 +5,17 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { createBooking, type CreateBookingOutcome } from '@/lib/actions/bookings';
+import { createBooking, priceQuote, type CreateBookingOutcome } from '@/lib/actions/bookings';
+
+const PROMO_ERROR_COPY: Record<string, string> = {
+  code_not_found: 'That code does not exist.',
+  inactive: 'That code is no longer active.',
+  not_yet_valid: 'That code is not valid yet.',
+  expired: 'That code has expired.',
+  usage_exceeded: 'That code has reached its usage limit.',
+  below_min_amount: 'Your subtotal is below the minimum for this code.',
+  category_mismatch: 'That code does not apply to this vehicle.',
+};
 
 const ERROR_COPY: Record<string, string> = {
   forbidden: 'Please sign in as a customer.',
@@ -33,8 +43,35 @@ interface Props {
 export function CheckoutForm({ vehicleId, pickupAt, returnAt, rentalKind, addonIds, totalAed }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [promoPending, startPromo] = useTransition();
   const [pickupAddress, setPickupAddress] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedCode, setAppliedCode] = useState<string | null>(null);
+  const [discountAed, setDiscountAed] = useState(0);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [effectiveTotal, setEffectiveTotal] = useState(totalAed);
   const [outcome, setOutcome] = useState<CreateBookingOutcome | null>(null);
+
+  function onApplyPromo() {
+    setPromoError(null);
+    startPromo(async () => {
+      const q = await priceQuote({ vehicleId, pickupAt, returnAt, addonIds, promoCode });
+      if (!q.ok) {
+        setPromoError('Could not re-price; try again.');
+        return;
+      }
+      if (q.quote.promoError) {
+        setPromoError(PROMO_ERROR_COPY[q.quote.promoError] ?? q.quote.promoError);
+        setAppliedCode(null);
+        setDiscountAed(0);
+        setEffectiveTotal(q.quote.totalAed);
+        return;
+      }
+      setAppliedCode(q.quote.appliedPromoCode);
+      setDiscountAed(q.quote.discountAed);
+      setEffectiveTotal(q.quote.totalAed);
+    });
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -47,6 +84,7 @@ export function CheckoutForm({ vehicleId, pickupAt, returnAt, rentalKind, addonI
         rentalKind,
         addonIds,
         pickupAddress,
+        promoCode: appliedCode ?? undefined,
       });
       setOutcome(res);
       if (res.ok) router.push(`/my-bookings/${res.code}`);
@@ -71,14 +109,42 @@ export function CheckoutForm({ vehicleId, pickupAt, returnAt, rentalKind, addonI
         </p>
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="promoCode">Promo code</Label>
+        <div className="flex gap-2">
+          <Input
+            id="promoCode"
+            name="promoCode"
+            value={promoCode}
+            onChange={(e) => setPromoCode(e.target.value)}
+            placeholder="e.g. SUMMER25"
+          />
+          <Button type="button" variant="outline" onClick={onApplyPromo} disabled={promoPending || !promoCode}>
+            {promoPending ? 'Applying…' : 'Apply'}
+          </Button>
+        </div>
+        {promoError && <p className="text-xs text-destructive">{promoError}</p>}
+        {appliedCode && (
+          <p className="text-xs text-green-700">
+            Code {appliedCode} applied — you save AED {discountAed.toLocaleString()}.
+          </p>
+        )}
+      </div>
+
       <div className="rounded-md border bg-muted/30 p-4 text-sm">
         <div className="flex justify-between">
           <span>Rental type</span>
           <span className="capitalize">{rentalKind.replace('_', '-')}</span>
         </div>
+        {discountAed > 0 && (
+          <div className="flex justify-between text-green-700">
+            <span>Discount ({appliedCode})</span>
+            <span>− AED {discountAed.toLocaleString()}</span>
+          </div>
+        )}
         <div className="flex justify-between font-semibold">
           <span>Total due at checkout</span>
-          <span>AED {totalAed.toLocaleString()}</span>
+          <span>AED {effectiveTotal.toLocaleString()}</span>
         </div>
         <div className="mt-2 text-xs text-muted-foreground">
           Payment integration ships in Plan #7. For now the booking lands in &quot;pending payment&quot; and is visible to the manager for processing.

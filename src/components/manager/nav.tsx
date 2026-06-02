@@ -13,6 +13,8 @@ import {
   Settings,
   Users,
   ClipboardList,
+  Bell,
+  ShieldCheck,
 } from 'lucide-react';
 
 type NavItem = {
@@ -32,6 +34,8 @@ const items: NavItem[] = [
   { href: '/manager/drivers', label: 'Drivers', Icon: UserCog },
   { href: '/manager/promos', label: 'Promotions', Icon: Tag },
   { href: '/manager/reports', label: 'Reports', Icon: BarChart3 },
+  { href: '/manager/notifications', label: 'Notifications', Icon: Bell },
+  { href: '/manager/users', label: 'Agents', Icon: ShieldCheck },
   { href: '/manager/settings', label: 'Settings', Icon: Settings },
 ];
 

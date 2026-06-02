@@ -25,3 +25,5 @@ export * from './payment-holds';
 export * from './refunds';
 export * from './webhook-events';
 export * from './provider-credentials';
+export * from './agent-permissions';
+export * from './notifications';

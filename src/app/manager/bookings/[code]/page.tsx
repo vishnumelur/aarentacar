@@ -16,6 +16,8 @@ import {
 import { ApprovalPanel } from '@/components/manager/approval-panel';
 import { DispatchPanel } from '@/components/manager/dispatch-panel';
 import { PaymentsPanel } from '@/components/manager/payments-panel';
+import { confirmBankTransferForm } from '@/lib/actions/payments';
+import { Button } from '@/components/ui/button';
 
 export default async function ManagerBookingDetailPage({
   params,
@@ -70,6 +72,19 @@ export default async function ManagerBookingDetailPage({
     .orderBy(desc(paymentHolds.createdAt))
     .limit(1);
 
+  const [pendingBankTransfer] = await db
+    .select({ id: payments.id, amountAed: payments.amountAed })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.bookingId, booking.id),
+        eq(payments.method, 'bank_transfer'),
+        eq(payments.status, 'manual_pending'),
+      ),
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(1);
+
   return (
     <div className="space-y-6">
       <Link href="/manager/bookings" className="text-sm text-primary underline">
@@ -87,6 +102,22 @@ export default async function ManagerBookingDetailPage({
           {booking.status.replace(/_/g, ' ')}
         </span>
       </div>
+
+      {pendingBankTransfer && (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 p-6 text-sm">
+          <h2 className="font-semibold">Bank transfer pending</h2>
+          <p className="mt-1 text-muted-foreground">
+            Customer flagged a bank transfer of AED {pendingBankTransfer.amountAed.toLocaleString()}.
+            Confirm once funds arrive to move the booking to approval.
+          </p>
+          <form action={confirmBankTransferForm} className="mt-3">
+            <input type="hidden" name="paymentId" value={pendingBankTransfer.id} />
+            <Button type="submit" size="sm">
+              Confirm receipt
+            </Button>
+          </form>
+        </section>
+      )}
 
       {booking.status === 'pending_approval' && <ApprovalPanel bookingId={booking.id} />}
       {booking.status === 'approved' && <DispatchPanel bookingId={booking.id} />}
