@@ -105,6 +105,39 @@ export async function releaseDeposit(input: {
   return { ok: true };
 }
 
+/**
+ * System (job-run) deposit release — no logged-in user. Called by the
+ * `deposit-release` pg-boss handler for auto-eligible holds. Audited with a
+ * null actor (system). Throws on provider error so the handler can count it.
+ */
+export async function systemReleaseDeposit(holdId: string): Promise<void> {
+  const [hold] = await db.select().from(paymentHolds).where(eq(paymentHolds.id, holdId)).limit(1);
+  if (!hold) throw new Error('not_found');
+  if (hold.status !== 'held') throw new Error('invalid_status');
+
+  if (hold.gatewayRef) {
+    await stripeProvider.releaseHold(hold.gatewayRef);
+  }
+
+  await db
+    .update(paymentHolds)
+    .set({ status: 'released', releasedAt: new Date(), updatedAt: new Date() })
+    .where(eq(paymentHolds.id, hold.id));
+
+  await db.insert(bookingEvents).values({
+    bookingId: hold.bookingId,
+    kind: 'deposit_released',
+    payload: { amountAed: hold.amountAed, auto: true },
+  });
+  await db.insert(auditLogs).values({
+    actorUserId: null,
+    action: 'deposit.auto_released',
+    targetType: 'booking',
+    targetId: hold.bookingId,
+    payload: { holdId: hold.id, amountAed: hold.amountAed, system: true },
+  });
+}
+
 export type CaptureDepositOutcome =
   | { ok: true }
   | { ok: false; error: DepositError | 'amount_exceeds_hold' };

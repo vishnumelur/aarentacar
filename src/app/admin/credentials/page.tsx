@@ -3,7 +3,7 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { auditLogs } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
-import { PortalShell } from '@/components/portal-shell';
+import { AdminPage } from '@/components/admin/admin-page';
 import {
   CredentialCard,
   type FieldState,
@@ -44,7 +44,7 @@ export default async function CredentialsPage() {
     .limit(50);
 
   return (
-    <PortalShell title="Provider Credentials">
+    <AdminPage title="Provider Credentials">
       <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
         Paste API keys for each provider. Values are encrypted with AES-256-GCM
         and picked up by the app within 30 seconds — no restart needed. Keys
@@ -78,6 +78,6 @@ export default async function CredentialsPage() {
           );
         })}
       </div>
-    </PortalShell>
+    </AdminPage>
   );
 }

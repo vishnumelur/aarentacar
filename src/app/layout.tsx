@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { Inter, Cairo } from 'next/font/google';
+import { Suspense } from 'react';
 import { SwRegister } from '@/components/sw-register';
+import { MaintenanceBanner } from '@/components/maintenance-banner';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
@@ -38,6 +40,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen bg-background text-foreground antialiased">
         <NextIntlClientProvider messages={messages} locale={locale}>
           <SwRegister />
+          <Suspense fallback={null}>
+            <MaintenanceBanner />
+          </Suspense>
           {children}
           <Toaster />
         </NextIntlClientProvider>

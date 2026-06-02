@@ -343,6 +343,7 @@ export type CreateBookingOutcome =
       error:
         | 'forbidden'
         | 'invalid_input'
+        | 'maintenance_mode'
         | 'profile_required'
         | 'kyc_required'
         | 'driver_under_age'
@@ -361,6 +362,12 @@ export async function createBooking(
   const user = await getCurrentUser();
   if (!user || user.role !== 'customer') return { ok: false, error: 'forbidden' };
   if (user.verificationStatus !== 'verified') return { ok: false, error: 'kyc_required' };
+
+  // Maintenance mode (Plan #11 feature flag) blocks new bookings.
+  const { isFeatureEnabled } = await import('@/lib/feature-flags');
+  if (await isFeatureEnabled('maintenance-mode')) {
+    return { ok: false, error: 'maintenance_mode' };
+  }
 
   const parsed = createBookingSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'invalid_input' };

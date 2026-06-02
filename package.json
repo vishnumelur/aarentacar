@@ -30,6 +30,7 @@
     "db:seed-test-users": "tsx scripts/seed-test-users.ts",
     "db:seed-all": "pnpm db:bootstrap && pnpm db:seed-inventory && pnpm db:seed-addons && pnpm db:seed-test-users",
     "minio:bootstrap": "tsx scripts/minio-bootstrap.ts",
+    "worker:start": "tsx scripts/worker.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -51,6 +52,7 @@
     "next-intl": "^4.13.0",
     "next-themes": "^0.4.6",
     "papaparse": "^5.5.3",
+    "pg-boss": "^12.18.2",
     "postgres": "^3.4.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

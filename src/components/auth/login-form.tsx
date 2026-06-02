@@ -36,8 +36,14 @@ export function LoginForm() {
       setError(res.status === 401 ? t('invalidCredentials') : t('generic'));
       return;
     }
-    const { user } = (await res.json()) as { user: { role: string } };
-    router.push(ROLE_REDIRECT[user.role] ?? '/');
+    const data = (await res.json()) as
+      | { totpRequired: true }
+      | { user: { role: string } };
+    if ('totpRequired' in data) {
+      router.push('/totp');
+      return;
+    }
+    router.push(ROLE_REDIRECT[data.user.role] ?? '/');
   }
 
   return (

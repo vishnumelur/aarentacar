@@ -27,3 +27,5 @@ export * from './webhook-events';
 export * from './provider-credentials';
 export * from './agent-permissions';
 export * from './notifications';
+export * from './feature-flags';
+export * from './totp-secrets';

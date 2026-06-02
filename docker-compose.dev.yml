@@ -34,6 +34,37 @@ services:
       timeout: 5s
       retries: 5
 
+  # pg-boss worker (Plan #11). Runs the deferred jobs (document-expiry,
+  # deposit-release, driver-pings-prune, daily-pg-dump). Uses a Node image and
+  # mounts the repo so it shares the app's runtime in dev; the production image
+  # is built in Plan #13. Installs postgresql-client + gzip for the pg_dump job.
+  worker:
+    image: node:22-bookworm-slim
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "corepack enable &&
+             corepack prepare pnpm@10.28.0 --activate &&
+             apt-get update && apt-get install -y postgresql-client gzip &&
+             pnpm install --frozen-lockfile &&
+             pnpm worker:start"
+    environment:
+      DATABASE_URL: postgres://aa:aa@postgres:5432/aa_dev
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXRlc3Q=}
+      SESSION_COOKIE_DOMAIN: localhost
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: '9000'
+      MINIO_ACCESS_KEY: minio-dev
+      MINIO_SECRET_KEY: minio-dev-secret
+      NODE_ENV: development
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   minio-data:

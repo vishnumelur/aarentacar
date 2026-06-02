@@ -7,6 +7,8 @@ const envSchema = z.object({
     .string()
     .min(43, 'ENCRYPTION_KEY must be 32 bytes base64-encoded (44 chars)'),
   SESSION_COOKIE_DOMAIN: z.string().min(1),
+  // Build/commit SHA surfaced on the super-admin system-health page (Plan #11).
+  GIT_SHA: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   SMTP_HOST: z.string().default('localhost'),
   SMTP_PORT: z.coerce.number().int().default(25),
   SMTP_FROM: z.email().default('no-reply@aa-rentacar.com'),

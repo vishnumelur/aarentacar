@@ -24,8 +24,9 @@ if (!email || !password) {
 async function main() {
   const { eq } = await import('drizzle-orm');
   const { db } = await import('@/db');
-  const { users, settings } = await import('@/db/schema');
+  const { users, settings, featureFlags } = await import('@/db/schema');
   const { hashPassword } = await import('@/lib/auth/password');
+  const { FEATURE_FLAG_KEYS, FEATURE_FLAG_DESCRIPTIONS } = await import('@/lib/feature-flags');
 
   const existing = await db.select().from(users).where(eq(users.email, email!)).limit(1);
   if (existing.length > 0) {
@@ -60,6 +61,19 @@ async function main() {
     if (found.length === 0) {
       await db.insert(settings).values({ key: s.key, value: s.value as object });
       console.warn(`Seeded setting: ${s.key}`);
+    }
+  }
+
+  // Phase-1 feature flags, all disabled by default (Plan #11).
+  for (const key of FEATURE_FLAG_KEYS) {
+    const found = await db.select().from(featureFlags).where(eq(featureFlags.key, key)).limit(1);
+    if (found.length === 0) {
+      await db.insert(featureFlags).values({
+        key,
+        enabled: false,
+        description: FEATURE_FLAG_DESCRIPTIONS[key],
+      });
+      console.warn(`Seeded feature flag: ${key}`);
     }
   }
 

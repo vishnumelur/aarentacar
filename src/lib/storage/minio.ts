@@ -23,6 +23,8 @@ export const BUCKETS = {
   documents: 'documents',
   inspections: 'inspections',
   agreements: 'agreements',
+  // Daily pg_dump artifacts written by the pg-boss `daily-pg-dump` job (Plan #11).
+  backups: 'backups',
 } as const;
 
 export type BucketName = (typeof BUCKETS)[keyof typeof BUCKETS];

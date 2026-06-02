@@ -17,6 +17,8 @@ export const verificationStatusEnum = pgEnum('verification_status', [
   'rejected',
 ]);
 
+export const userStatusEnum = pgEnum('user_status', ['active', 'suspended']);
+
 export const users = pgTable(
   'users',
   {
@@ -30,6 +32,7 @@ export const users = pgTable(
     verificationStatus: verificationStatusEnum('verification_status')
       .notNull()
       .default('unverified'),
+    status: userStatusEnum('status').notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),

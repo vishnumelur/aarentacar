@@ -6,6 +6,11 @@ import { users } from '@/db/schema';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
 import { buildSessionCookie } from '@/lib/auth/cookies';
+import { isTotpEnabled } from '@/lib/totp/store';
+import {
+  signTotpPending,
+  TOTP_PENDING_COOKIE_NAME,
+} from '@/lib/auth/totp-pending';
 import { env } from '@/lib/env';
 
 const bodySchema = z.object({
@@ -25,6 +30,30 @@ export async function POST(req: Request): Promise<NextResponse> {
   const user = rows[0];
   if (!user || !(await verifyPassword(parsed.password, user.passwordHash))) {
     return NextResponse.json({ error: 'invalid_credentials' }, { status: 401 });
+  }
+
+  // Suspended accounts cannot log in (Plan #11 super-admin suspend).
+  if (user.status === 'suspended') {
+    return NextResponse.json({ error: 'account_suspended' }, { status: 403 });
+  }
+
+  // Mandatory TOTP challenge for super-admins with 2FA enabled: do NOT finalize
+  // the session here — issue a short-lived interim token and let /totp verify
+  // the code before minting the real session.
+  if (user.role === 'superadmin' && (await isTotpEnabled(user.id))) {
+    const pending = signTotpPending(user.id, env().ENCRYPTION_KEY);
+    const response = NextResponse.json({ totpRequired: true });
+    response.cookies.set({
+      name: TOTP_PENDING_COOKIE_NAME,
+      value: pending,
+      httpOnly: true,
+      secure: env().NODE_ENV === 'production',
+      sameSite: 'lax',
+      domain: env().SESSION_COOKIE_DOMAIN,
+      path: '/',
+      maxAge: 5 * 60,
+    });
+    return response;
   }
 
   const { token, expiresAt } = await createSession(db, {
