@@ -1,6 +1,6 @@
 # AA Rent A Car — Progress Snapshot
 
-**Last updated:** 2026-06-01
+**Last updated:** 2026-06-02
 **Repo:** https://github.com/vishnumelur/aarentacar
 **Branch:** `main` (all work shipped here per user's deploy flow)
 
@@ -8,7 +8,11 @@
 
 ## Headline status
 
-**7 of 13 plans shipped** end-to-end. Roadmap is complete (all 13 plans written + Plan #14 holding pen). Customers can register, get verified, browse, book, and now **pay** (Stripe card incl. Apple/Google Pay, Tabby BNPL, Cash on Delivery, Bank Transfer) — paid online flips the booking to `pending_approval`; offline methods route through manual confirmation. Card payments place a refundable manual-capture deposit hold; managers can capture/release deposits and issue refunds. Webhooks are signature-verified and idempotent. Managers can do the full operational loop including dispatch. Drivers can install the PWA, accept jobs, capture handover + return inspections, and ping their live location. Live tracking (Plan #8) is next.
+**13 of 13 plans shipped** end-to-end (Phase 1 code-complete). Roadmap is fully implemented + Plan #14 holding pen remains.
+
+Customers register, get verified, browse, book, **pay** (Stripe card incl. Apple/Google Pay, Tabby BNPL, COD, Bank Transfer — paid online → `pending_approval`, offline → manual confirmation; refundable manual-capture deposit holds; signature-verified idempotent webhooks; cancellation-policy refunds; promo codes), and **watch their driver arrive live** (SSE + Mapbox Swiggy-style animated tracking with ETA + status pills). Managers have a real cockpit: KPI dashboard, promotions CRUD, revenue/occupancy/payment-mix reports with CSV export, agent permission matrix, notifications inbox, settings, and bank-transfer confirmation. Super-Admins get system health, audit-log viewer, feature flags, pg-boss jobs browser, danger zone, and **mandatory TOTP 2FA**. Provider API keys (Stripe/Tabby/Mapbox/SMTP/Sentry) are managed at runtime via an AES-256-GCM encrypted store — no restart, no `.env` editing. A self-hosted Postfix + OpenDKIM mail stack sends bilingual react-email transactional mail via a pg-boss `send-email` worker. Production deploy is fully scripted: multi-stage Dockerfile + Caddy SSL for all 4 subdomains, nightly age-encrypted pg_dump backups to MinIO, GlitchTip observability, and accept-then-scan ClamAV on uploads.
+
+**Verification at code-complete:** typecheck clean · **252 Vitest tests green** · lint clean · production build OK. Items requiring live infrastructure (Hetzner VPS, Cloudflare DNS/PTR, live Stripe/Tabby/Mapbox/SMTP keys, GlitchTip image) are implemented and flagged `verify-on-deploy` — see `docs/go-live-checklist.md`.
 
 | Plan | Title | Status |
 |---|---|---|
@@ -19,25 +23,24 @@
 | #5 | Manager Dispatch (approve/reject + nearest-driver auto-suggest + dispatch) | ✅ shipped |
 | #6 | Driver Portal PWA (push, accept, handover with PDF e-signature, return diff, live ping) | ✅ shipped |
 | #7 | Payments (Stripe + Tabby + COD + Bank Transfer + deposits + refunds) | ✅ shipped |
-| #8 | Live Tracking (SSE + Swiggy-style animated map) | written, ready |
-| #9 | Provider Credentials UI (AES-256-GCM encrypted store) | written, ready |
-| #10 | Manager Portal Completion (dashboard KPIs, reports, promos, agent perms, settings) | written, ready |
-| #11 | Super-Admin + pg-boss workers (health, audit, feature flags, TOTP 2FA) | written, ready |
-| #12 | Mail Server (Postfix + OpenDKIM + Cloudflare DNS + react-email) | written, ready |
-| #13 | Production Deploy (Caddy SSL, backups, GlitchTip, ClamAV) | written, ready |
+| #8 | Live Tracking (SSE + Swiggy-style animated map) | ✅ shipped |
+| #9 | Provider Credentials UI (AES-256-GCM encrypted store) | ✅ shipped |
+| #10 | Manager Portal Completion (dashboard KPIs, reports, promos, agent perms, settings) | ✅ shipped |
+| #11 | Super-Admin + pg-boss workers (health, audit, feature flags, TOTP 2FA) | ✅ shipped |
+| #12 | Mail Server (Postfix + OpenDKIM + Cloudflare DNS + react-email) | ✅ shipped (infra verify-on-deploy) |
+| #13 | Production Deploy (Caddy SSL, backups, GlitchTip, ClamAV) | ✅ shipped (infra verify-on-deploy) |
 | #14 | Phase 1 gaps + Phase 2 + indefinitely deferred | holding pen |
 
 ---
 
 ## Numbers
 
-- **22** Postgres tables across **7** Drizzle migrations
-- **~10,000** lines of production code (TypeScript / TSX)
-- **94** unit + integration tests (Vitest), all green
-- **18** end-to-end tests (Playwright), all green locally
+- **~30** Postgres tables across **14** Drizzle migrations (latest `0013`)
+- **252** unit + integration tests (Vitest), all green
+- End-to-end (Playwright) specs across customer/manager/driver/super-admin flows
 - **8** user roles supported: customer, driver, agent, manager, superadmin (+ 3 statuses each)
-- **4** payment methods designed (Card/Tabby/COD/Bank Transfer — wiring in Plan #7)
-- **0** third-party SaaS dependencies (everything self-hostable per design spec)
+- **4** payment methods live (Card/Tabby/COD/Bank Transfer) + deposits + refunds + promo codes
+- **0** third-party SaaS *infrastructure* dependencies — payments use Stripe/Tabby gateways per spec; auth, email, observability, and storage are all self-hosted
 
 ---
 
