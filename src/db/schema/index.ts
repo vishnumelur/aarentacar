@@ -24,3 +24,4 @@ export * from './payments';
 export * from './payment-holds';
 export * from './refunds';
 export * from './webhook-events';
+export * from './provider-credentials';

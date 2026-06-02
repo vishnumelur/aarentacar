@@ -57,6 +57,13 @@
       "when": 1780382380470,
       "tag": "0007_pink_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780384936210,
+      "tag": "0008_keen_skullbuster",
+      "breakpoints": true
     }
   ]
 }

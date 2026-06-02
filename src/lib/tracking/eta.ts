@@ -1,4 +1,4 @@
-import { env } from '@/lib/env';
+import { getCredential } from '@/lib/credentials/store';
 import type { LatLng } from './interpolation';
 
 /**
@@ -52,7 +52,11 @@ export async function getEta({
   token,
   fetchImpl,
 }: GetEtaArgs): Promise<EtaResult | null> {
-  const resolvedToken = token ?? env().MAPBOX_TOKEN;
+  // Plan #9: server-side Mapbox token now resolves through the encrypted
+  // credential store (which falls back to the MAPBOX_TOKEN env var). The public
+  // NEXT_PUBLIC_MAPBOX_TOKEN remains env-only and is unaffected here.
+  const resolvedToken =
+    token ?? (await getCredential('mapbox', 'access_token')) ?? undefined;
   if (!resolvedToken) return null;
 
   const key = cacheKey(from, to);

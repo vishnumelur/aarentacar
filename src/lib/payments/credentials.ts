@@ -1,13 +1,12 @@
-import { env } from '@/lib/env';
+import { getCredential } from '@/lib/credentials/store';
 
 /**
- * Provider credential lookup. Plan #9 introduces a `provider_credentials` table
- * (manager-managed, encrypted) that this will read from first. Until then we
- * resolve straight from env.
+ * Provider credential lookup for the payment modules.
  *
- * TODO(Plan #9): read from `provider_credentials` table, falling back to env
- * for bootstrap. The signature is intentionally stable so the retrofit is
- * internal-only.
+ * As of Plan #9 this delegates to the encrypted `provider_credentials` store
+ * (`getCredential`), which itself falls back to env vars when no value has been
+ * pasted into the Super-Admin UI. The signature stays narrow (stripe/tabby +
+ * the payment key names) so the payment code is unaffected by the retrofit.
  */
 export type Provider = 'stripe' | 'tabby';
 export type CredentialKey =
@@ -16,20 +15,10 @@ export type CredentialKey =
   | 'public_key'
   | 'webhook_secret';
 
-export function getProviderCredential(
+export async function getProviderCredential(
   provider: Provider,
   key: CredentialKey,
-): string | undefined {
-  const e = env();
-  if (provider === 'stripe') {
-    if (key === 'secret_key') return e.STRIPE_SECRET_KEY;
-    if (key === 'publishable_key') return e.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-    if (key === 'webhook_secret') return e.STRIPE_WEBHOOK_SECRET;
-  }
-  if (provider === 'tabby') {
-    if (key === 'secret_key') return e.TABBY_SECRET_KEY;
-    if (key === 'public_key') return e.TABBY_PUBLIC_KEY;
-    if (key === 'webhook_secret') return e.TABBY_WEBHOOK_SECRET;
-  }
-  return undefined;
+): Promise<string | undefined> {
+  const value = await getCredential(provider, key);
+  return value ?? undefined;
 }

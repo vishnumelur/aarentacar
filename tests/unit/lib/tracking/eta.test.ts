@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { getEta, __clearEtaCache } from '@/lib/tracking/eta';
 import type { LatLng } from '@/lib/tracking/interpolation';
+import * as credentialStore from '@/lib/credentials/store';
 
 const FROM: LatLng = { lat: 25.092, lng: 55.149 };
 const TO: LatLng = { lat: 25.197, lng: 55.274 };
@@ -64,10 +65,14 @@ describe('getEta', () => {
   });
 
   it('returns null when no token is available', async () => {
+    // Plan #9: with no explicit token, getEta resolves through the credential
+    // store. Stub it to "unset" so this stays a pure unit test (no DB / network).
+    vi.spyOn(credentialStore, 'getCredential').mockResolvedValue(null);
     const fetchImpl = vi.fn();
     const res = await getEta({ from: FROM, to: TO, token: undefined, fetchImpl });
     expect(res).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
   it('returns null on a non-ok response', async () => {

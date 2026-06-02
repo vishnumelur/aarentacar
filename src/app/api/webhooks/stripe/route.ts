@@ -20,13 +20,13 @@ export const runtime = 'nodejs';
  */
 export async function POST(req: Request): Promise<Response> {
   const body = await req.text();
-  const webhookSecret = getProviderCredential('stripe', 'webhook_secret');
+  const webhookSecret = await getProviderCredential('stripe', 'webhook_secret');
 
   let event: Stripe.Event;
   if (webhookSecret) {
     const sig = req.headers.get('stripe-signature') ?? '';
     try {
-      event = constructWebhookEvent(body, sig, webhookSecret);
+      event = await constructWebhookEvent(body, sig, webhookSecret);
     } catch (err) {
       console.warn('stripe webhook signature verification failed', err);
       return new Response('invalid signature', { status: 400 });

@@ -35,8 +35,9 @@ export interface CreatedSession {
 export async function createSession(
   input: CreateSessionInput,
 ): Promise<CreatedSession> {
-  const secret = getProviderCredential('tabby', 'secret_key');
+  const secret = await getProviderCredential('tabby', 'secret_key');
   if (!secret) throw new TabbyNotConfiguredError();
+  const merchantCode = (await getProviderCredential('tabby', 'public_key')) ?? '';
   const baseUrl = env().APP_BASE_URL;
   const successUrl = `${baseUrl}/my-bookings/${input.bookingCode}?payment=tabby_success`;
   const cancelUrl = `${baseUrl}/my-bookings/${input.bookingCode}/checkout?payment=tabby_cancel`;
@@ -60,7 +61,7 @@ export async function createSession(
         order: { reference_id: input.bookingCode },
       },
       lang: 'en',
-      merchant_code: getProviderCredential('tabby', 'public_key') ?? '',
+      merchant_code: merchantCode,
       merchant_urls: { success: successUrl, cancel: cancelUrl, failure: cancelUrl },
     }),
   });
@@ -82,7 +83,7 @@ export async function refundPayment(
   paymentId: string,
   amountAed: number,
 ): Promise<{ refundId: string }> {
-  const secret = getProviderCredential('tabby', 'secret_key');
+  const secret = await getProviderCredential('tabby', 'secret_key');
   if (!secret) throw new TabbyNotConfiguredError();
   const res = await fetch(`${TABBY_API_BASE}/api/v2/payments/${paymentId}/refunds`, {
     method: 'POST',

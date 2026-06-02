@@ -38,7 +38,7 @@ export async function startCardPayment(input: {
   if (booking.customerId !== user.id) return { ok: false, error: 'forbidden' };
   if (booking.status !== 'pending_payment') return { ok: false, error: 'invalid_status' };
 
-  const publishableKey = stripeProvider.getStripePublishableKey();
+  const publishableKey = await stripeProvider.getStripePublishableKey();
 
   let intent;
   try {

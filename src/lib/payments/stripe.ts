@@ -20,8 +20,8 @@ export class StripeNotConfiguredError extends Error {
   }
 }
 
-export function getStripe(): Stripe {
-  const key = getProviderCredential('stripe', 'secret_key');
+export async function getStripe(): Promise<Stripe> {
+  const key = await getProviderCredential('stripe', 'secret_key');
   if (!key) throw new StripeNotConfiguredError();
   if (!cached) {
     // Pin to the SDK's bundled API version (Stripe types enforce the literal).
@@ -40,8 +40,8 @@ export function aedToFils(aed: number): number {
 }
 
 /** Publishable key for Stripe Elements (safe to send to the browser). */
-export function getStripePublishableKey(): string {
-  return getProviderCredential('stripe', 'publishable_key') ?? '';
+export async function getStripePublishableKey(): Promise<string> {
+  return (await getProviderCredential('stripe', 'publishable_key')) ?? '';
 }
 
 export interface CreateIntentInput {
@@ -59,7 +59,7 @@ export interface CreatedIntent {
 export async function createPaymentIntent(
   input: CreateIntentInput,
 ): Promise<CreatedIntent> {
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const pi = await stripe.paymentIntents.create({
     amount: aedToFils(input.amountAed),
     currency: 'aed',
@@ -80,7 +80,7 @@ export async function createManualCaptureHold(input: {
   bookingCode: string;
   customerId: string;
 }): Promise<CreatedIntent> {
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const pi = await stripe.paymentIntents.create({
     amount: aedToFils(input.amountAed),
     currency: 'aed',
@@ -96,7 +96,7 @@ export async function createManualCaptureHold(input: {
 }
 
 export async function releaseHold(intentId: string): Promise<void> {
-  const stripe = getStripe();
+  const stripe = await getStripe();
   await stripe.paymentIntents.cancel(intentId);
 }
 
@@ -104,7 +104,7 @@ export async function captureHold(
   intentId: string,
   amountAed: number,
 ): Promise<void> {
-  const stripe = getStripe();
+  const stripe = await getStripe();
   await stripe.paymentIntents.capture(intentId, {
     amount_to_capture: aedToFils(amountAed),
   });
@@ -114,7 +114,7 @@ export async function refundPayment(
   paymentIntentId: string,
   amountAed: number,
 ): Promise<{ refundId: string }> {
-  const stripe = getStripe();
+  const stripe = await getStripe();
   const refund = await stripe.refunds.create({
     payment_intent: paymentIntentId,
     amount: aedToFils(amountAed),
@@ -126,11 +126,11 @@ export async function refundPayment(
  * Verify + parse a Stripe webhook payload. Split out so handlers (and tests)
  * can inject the signing secret.
  */
-export function constructWebhookEvent(
+export async function constructWebhookEvent(
   body: string,
   signature: string,
   webhookSecret: string,
-): Stripe.Event {
-  const stripe = getStripe();
+): Promise<Stripe.Event> {
+  const stripe = await getStripe();
   return stripe.webhooks.constructEvent(body, signature, webhookSecret);
 }

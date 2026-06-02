@@ -24,7 +24,7 @@ interface TabbyWebhook {
  */
 export async function POST(req: Request): Promise<Response> {
   const body = await req.text();
-  const secret = getProviderCredential('tabby', 'webhook_secret');
+  const secret = await getProviderCredential('tabby', 'webhook_secret');
 
   if (secret) {
     const sig = req.headers.get('x-tabby-signature') ?? '';
