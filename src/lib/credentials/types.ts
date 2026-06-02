@@ -5,7 +5,13 @@
  * in the DB.
  */
 
-export type CredentialProvider = 'stripe' | 'tabby' | 'mapbox' | 'smtp';
+export type CredentialProvider =
+  | 'stripe'
+  | 'tabby'
+  | 'mapbox'
+  | 'smtp'
+  | 'glitchtip'
+  | 'sentry';
 export type CredentialEnv = 'live' | 'test';
 
 /**
@@ -30,6 +36,10 @@ export const ENV_FALLBACK: Record<string, string> = {
   'smtp:password': 'SMTP_PASSWORD',
   'smtp:from': 'SMTP_FROM',
   'smtp:from_name': 'SMTP_FROM_NAME',
+  // Observability DSN (Plan #13). GlitchTip is Sentry-API-compatible; the SDK
+  // is a no-op when no DSN is configured.
+  'glitchtip:dsn': 'SENTRY_DSN',
+  'sentry:dsn': 'SENTRY_DSN',
 };
 
 export function envFallbackVar(provider: CredentialProvider, key: string): string | undefined {
@@ -61,6 +71,8 @@ export const PROVIDER_FIELDS: Record<CredentialProvider, CredentialFieldDef[]> =
     { key: 'webhook_secret', label: 'Webhook signing secret', secret: true },
   ],
   mapbox: [{ key: 'access_token', label: 'Access token', secret: true }],
+  glitchtip: [{ key: 'dsn', label: 'DSN', secret: true }],
+  sentry: [{ key: 'dsn', label: 'DSN', secret: true }],
   smtp: [
     { key: 'host', label: 'Host', secret: false },
     { key: 'port', label: 'Port', secret: false },
@@ -75,5 +87,7 @@ export const PROVIDER_LABELS: Record<CredentialProvider, string> = {
   stripe: 'Stripe',
   tabby: 'Tabby',
   mapbox: 'Mapbox',
+  glitchtip: 'GlitchTip (error tracking)',
+  sentry: 'Sentry (error tracking)',
   smtp: 'SMTP (email)',
 };

@@ -15,6 +15,7 @@ export const JOB_NAMES = {
   driverPingsPrune: 'driver-pings-prune',
   dailyPgDump: 'daily-pg-dump',
   sendEmail: 'send-email',
+  scanUploadedFile: 'scan-uploaded-file',
 } as const;
 
 export type JobName = (typeof JOB_NAMES)[keyof typeof JOB_NAMES];

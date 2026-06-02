@@ -19,7 +19,7 @@ import { TESTABLE_PROVIDERS } from '@/lib/credentials/test-connection';
 
 export const dynamic = 'force-dynamic';
 
-const PROVIDERS: CredentialProvider[] = ['stripe', 'tabby', 'mapbox', 'smtp'];
+const PROVIDERS: CredentialProvider[] = ['stripe', 'tabby', 'mapbox', 'smtp', 'glitchtip'];
 
 export default async function CredentialsPage() {
   const user = await getCurrentUser();

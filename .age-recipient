@@ -1,0 +1,19 @@
+# age PUBLIC recipient for encrypted Postgres backups (Plan #13, Task 4).
+#
+# This file holds ONLY the age PUBLIC key (recipient). It is committed on
+# purpose — a public key can encrypt but cannot decrypt. scripts/backup.sh reads
+# it to encrypt each nightly pg_dump before upload to MinIO.
+#
+# The matching age PRIVATE key (identity) is generated ONCE on the operator's
+# machine and kept OFFLINE — never on the VPS, never committed. Only it can
+# decrypt the backups (used by scripts/restore-drill.sh via AGE_IDENTITY).
+#
+# Generate the keypair on your laptop:
+#   age-keygen -o ~/.age/aa-backup.key        # prints "Public key: age1..."
+# then paste the printed "age1..." public key below (replacing the placeholder),
+# commit this file, and store ~/.age/aa-backup.key in a password manager.
+#
+# Lines starting with # are ignored; the first non-empty, non-comment line is
+# used as the recipient.
+
+age1REPLACE_WITH_YOUR_PUBLIC_RECIPIENT_KEY0000000000000000000000000

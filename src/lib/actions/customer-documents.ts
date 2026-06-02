@@ -6,6 +6,8 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db } from '@/db';
 import { customerDocuments, users } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
+import { BUCKETS } from '@/lib/storage/minio';
+import { enqueueScanSafe } from '@/lib/scan/enqueue';
 
 const submitSchema = z.object({
   type: z.enum([
@@ -46,13 +48,25 @@ export async function submitDocument(input: z.infer<typeof submitSchema>) {
       ),
     );
 
-  await db.insert(customerDocuments).values({
-    customerId: user.id,
-    type: parsed.data.type,
-    fileUrl: parsed.data.fileKey,
-    expiryDate: parsed.data.expiryDate ?? null,
-    status: 'pending',
-  });
+  const [inserted] = await db
+    .insert(customerDocuments)
+    .values({
+      customerId: user.id,
+      type: parsed.data.type,
+      fileUrl: parsed.data.fileKey,
+      expiryDate: parsed.data.expiryDate ?? null,
+      status: 'pending',
+    })
+    .returning({ id: customerDocuments.id });
+
+  // Accept-then-scan: queue a virus scan out of the request path (Plan #13).
+  if (inserted) {
+    await enqueueScanSafe({
+      bucket: BUCKETS.documents,
+      key: parsed.data.fileKey,
+      documentId: inserted.id,
+    });
+  }
 
   // Flip user.verification_status to pending so manager review queue picks them up
   await db

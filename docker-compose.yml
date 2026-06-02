@@ -1,0 +1,248 @@
+# =============================================================================
+# AA Rent A Car — PRODUCTION compose (Plan #13).
+#
+# This is the canonical production stack. Plan #12's mail block (postfix +
+# opendkim + clamav) is MERGED IN here; the old docker-compose.prod.yml is now a
+# thin pointer to this file (see docker-compose.prod.yml). Dev stays separate in
+# docker-compose.dev.yml and is NOT affected.
+#
+# Bring up on the VPS:   docker compose up -d   (see docs/hetzner-setup.md)
+#
+# Services: caddy (TLS reverse proxy) → app (Next standalone) + worker (pg-boss),
+# postgres, minio, glitchtip (+ its redis), and the mail stack (postfix,
+# opendkim, clamav). All on the private `internal` network; only caddy and the
+# mail SMTP port are exposed to the host.
+#
+# verify-on-deploy: requires the Hetzner VPS, real DNS, DKIM keys, and a
+# populated .env.production. None of this builds or runs in CI.
+# =============================================================================
+
+services:
+  # ---- reverse proxy / TLS ------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'caddy', 'version']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ---- Next.js app (standalone) ------------------------------------------
+  app:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: aa-app:latest
+    restart: always
+    env_file: [.env.production]
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: '3000'
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: '9000'
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+      SMTP_HOST: postfix
+      SMTP_PORT: '25'
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'node -e "fetch(\"http://localhost:3000/api/health\").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # ---- pg-boss worker (Plan #11/#12/#13 jobs) ----------------------------
+  worker:
+    image: aa-app:latest
+    restart: always
+    command: ['pnpm', 'worker:start']
+    env_file: [.env.production]
+    environment:
+      NODE_ENV: production
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: '9000'
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: '3310'
+      SMTP_HOST: postfix
+      SMTP_PORT: '25'
+    networks: [internal]
+    depends_on:
+      app:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      clamav:
+        condition: service_started
+    healthcheck:
+      # The worker has no HTTP port; treat a live tsx process as healthy.
+      test: ['CMD-SHELL', 'pgrep -f worker:start >/dev/null || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---- Postgres -----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: aa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.production}
+      POSTGRES_DB: aa_db
+    volumes:
+      # Host-path volume for backup ease (Plan #13, Task 4).
+      - /srv/aa/postgres:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U aa -d aa_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- MinIO (object storage) --------------------------------------------
+  minio:
+    image: minio/minio:latest
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set in .env.production}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set in .env.production}
+    volumes:
+      - /srv/aa/minio:/data
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---- GlitchTip (self-hosted, Sentry-compatible error tracking) ----------
+  # Uses its own dedicated Postgres + Redis so app DB load is unaffected. The
+  # app/worker send errors here via the DSN configured in Super-Admin →
+  # Provider Credentials (glitchtip:dsn) or SENTRY_DSN.
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    restart: always
+    env_file: [.env.production]
+    environment:
+      # GLITCHTIP_* secrets (SECRET_KEY, DATABASE_URL, REDIS_URL, etc.) live in
+      # .env.production. The internal DB/redis below back this service.
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:?set}@glitchtip-postgres:5432/glitchtip
+      REDIS_URL: redis://glitchtip-redis:6379/0
+      PORT: '8000'
+    networks: [internal]
+    depends_on:
+      glitchtip-postgres:
+        condition: service_healthy
+      glitchtip-redis:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:8000/_health/ || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:latest
+    restart: always
+    command: ['./bin/run-celery-with-beat.sh']
+    env_file: [.env.production]
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:?set}@glitchtip-postgres:5432/glitchtip
+      REDIS_URL: redis://glitchtip-redis:6379/0
+    networks: [internal]
+    depends_on:
+      glitchtip-postgres:
+        condition: service_healthy
+      glitchtip-redis:
+        condition: service_started
+
+  glitchtip-postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD:?set in .env.production}
+      POSTGRES_DB: glitchtip
+    volumes:
+      - glitchtip-postgres:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U glitchtip -d glitchtip']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  glitchtip-redis:
+    image: redis:7-alpine
+    restart: always
+    networks: [internal]
+
+  # ---- Mail stack (Plan #12 — merged in) ----------------------------------
+  postfix:
+    build: ./docker/postfix
+    restart: always
+    hostname: mail.aa-rentacar.com
+    networks: [internal]
+    volumes:
+      - postfix-spool:/var/spool/postfix
+    depends_on:
+      - opendkim
+    # Internal relay only — reachable as postfix:25 on the network.
+
+  opendkim:
+    build: ./docker/opendkim
+    restart: always
+    networks: [internal]
+    volumes:
+      # DKIM private key generated once via scripts/dkim-keygen.sh (gitignored).
+      - ./docker/opendkim/keys:/etc/opendkim/keys:ro
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: always
+    networks: [internal]
+    volumes:
+      - clamav-db:/var/lib/clamav
+    healthcheck:
+      # clamd answers PING on its TCP socket once the signature DB is loaded.
+      test: ['CMD-SHELL', 'echo PING | nc -w 5 localhost 3310 | grep -q PONG']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  caddy-data:
+  caddy-config:
+  glitchtip-postgres:
+  postfix-spool:
+  clamav-db:

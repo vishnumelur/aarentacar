@@ -1,0 +1,47 @@
+# AA Rent A Car — Caddy reverse proxy (Plan #13, Task 2).
+#
+# Auto Let's Encrypt TLS for the apex + www + manager + driver + admin
+# subdomains. The admin subdomain is IP-allowlisted per spec §7.4. All sites
+# proxy to the single Next.js app container (`app:3000`); the app routes by
+# hostname internally.
+#
+# Replace the <...> placeholders before first deploy. Caddy obtains and renews
+# certs automatically once DNS (docs/dns.md) points at this host.
+{
+	# ACME account email for Let's Encrypt expiry notices.
+	email manager@aa-rentacar.com
+}
+
+# ---- public site: apex + www -------------------------------------------------
+aa-rentacar.com, www.aa-rentacar.com {
+	encode gzip zstd
+	reverse_proxy app:3000
+}
+
+# ---- manager portal ----------------------------------------------------------
+manager.aa-rentacar.com {
+	encode gzip zstd
+	reverse_proxy app:3000
+}
+
+# ---- driver portal -----------------------------------------------------------
+driver.aa-rentacar.com {
+	encode gzip zstd
+	reverse_proxy app:3000
+}
+
+# ---- admin (super-admin) — IP-allowlisted per spec §7.4 ----------------------
+# Replace <YOUR_OFFICE_IP> / <DEV_IP> with the static IPs allowed to reach the
+# super-admin surface. Add more entries space-separated. Everyone else gets 403
+# before the request ever reaches the app.
+admin.aa-rentacar.com {
+	encode gzip zstd
+
+	@allowedIps remote_ip <YOUR_OFFICE_IP> <DEV_IP>
+	handle @allowedIps {
+		reverse_proxy app:3000
+	}
+	handle {
+		respond "Forbidden" 403
+	}
+}

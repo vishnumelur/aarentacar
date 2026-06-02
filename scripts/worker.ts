@@ -193,6 +193,32 @@ async function main(): Promise<void> {
     }
   });
 
+  // ---- scan-uploaded-file (Plan #13) -----------------------------------
+  await boss.work(JOB_NAMES.scanUploadedFile, async (jobs) => {
+    const { runScanUploadedFile } = await import('@/lib/jobs/handlers/scan-uploaded-file');
+    const { getObjectBuffer } = await import('@/lib/storage/minio');
+    const { tcpScanner } = await import('@/lib/scan/clamav');
+    const list = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of list) {
+      const data = job.data as import('@/lib/jobs/handlers/scan-uploaded-file').ScanUploadedFileJob;
+      const result = await runScanUploadedFile(data, {
+        download: getObjectBuffer,
+        scan: tcpScanner,
+        rejectDocument: async (documentId, note) => {
+          await db
+            .update(customerDocuments)
+            .set({ status: 'rejected', reviewNote: note, reviewedAt: new Date() })
+            .where(eq(customerDocuments.id, documentId));
+        },
+        audit,
+      });
+      console.warn(
+        `[scan-uploaded-file] ${data.bucket}/${data.key} clean=${result.clean}` +
+          (result.signature ? ` sig=${result.signature}` : ''),
+      );
+    }
+  });
+
   // ---- schedules (cron, server-local time) ------------------------------
   // document-expiry daily 02:00; deposit-release every 15 min;
   // driver-pings-prune daily 03:00; daily-pg-dump daily 02:00.

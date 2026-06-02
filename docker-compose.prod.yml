@@ -1,50 +1,15 @@
-# Production mail-stack service definitions (Plan #12, Task 3).
+# DEPRECATED — see docker-compose.yml (Plan #13).
 #
-# These are the Postfix + OpenDKIM + ClamAV services per the plan. The FULL
-# production compose (app, worker, postgres, minio, reverse proxy, TLS) is
-# assembled in Plan #13 — this file holds the mail block so Plan #13 can include
-# / merge it and so the definitions are reviewable now.
+# Plan #12 created this file to hold the mail-stack service block before the full
+# production compose existed. Plan #13 assembled the canonical production stack
+# (app, worker, postgres, minio, caddy, glitchtip + the mail services) in
+# docker-compose.yml and MERGED this file's services into it.
 #
-# Intentionally separate from docker-compose.dev.yml: the dev DB/app/worker must
-# NOT depend on postfix. Bring the mail stack up on the production host with:
-#   docker compose -f docker-compose.prod.yml up -d
+# `docker compose up -d` (no -f) now reads the canonical docker-compose.yml.
+# This file is retained only as an alias so any existing operator muscle-memory
+# of `-f docker-compose.prod.yml` still resolves to the production stack.
 #
-# verify-on-deploy: building + running these requires the production VPS with
-# the DKIM key generated (scripts/dkim-keygen.sh) and DNS published
-# (docs/mail-setup.md). They are not built or run in CI.
+# Do NOT add services here — edit docker-compose.yml instead.
 
-services:
-  postfix:
-    build: ./docker/postfix
-    restart: unless-stopped
-    hostname: mail.aa-rentacar.com
-    networks: [internal]
-    volumes:
-      - postfix-spool:/var/spool/postfix
-    depends_on:
-      - opendkim
-    # No `ports:` — internal relay only, reachable as postfix:25 on the network.
-
-  opendkim:
-    build: ./docker/opendkim
-    restart: unless-stopped
-    networks: [internal]
-    volumes:
-      # DKIM private key generated once via scripts/dkim-keygen.sh (gitignored).
-      - ./docker/opendkim/keys:/etc/opendkim/keys:ro
-
-  clamav:
-    image: clamav/clamav:stable
-    restart: unless-stopped
-    networks: [internal]
-    volumes:
-      - clamav-db:/var/lib/clamav
-    # ClamAV is wired for upload scanning in Plan #13's production-deploy plan.
-
-networks:
-  internal:
-    driver: bridge
-
-volumes:
-  postfix-spool:
-  clamav-db:
+include:
+  - docker-compose.yml

@@ -1,0 +1,46 @@
+# =============================================================================
+# Production deploy via SSH (Plan #13, Task 8) — OPTIONAL / DEFERRED.
+#
+# Per user preference, initial production deploys are MANUAL (ssh to the VPS and
+# run scripts/deploy.sh). This workflow is therefore gated behind
+# `workflow_dispatch` (manual "Run workflow" button) instead of auto-running on
+# push, so it can NEVER fire unexpectedly and cannot affect the CI workflow
+# (.github/workflows/ci.yml).
+#
+# To enable auto-deploy on push to main once the platform is stable, uncomment
+# the `push` trigger below and configure the repo secrets:
+#   DEPLOY_SSH_HOST, DEPLOY_SSH_USER, DEPLOY_SSH_KEY  (and optionally a notify
+#   webhook). Until then this is inert.
+# =============================================================================
+name: Deploy (manual)
+
+on:
+  workflow_dispatch:
+  # Enable when ready for continuous deploy (deferred):
+  # push:
+  #   branches: [main]
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Extra safety: only the repo owner running it manually proceeds.
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: SSH to VPS and run the deploy ritual
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/aarentacar
+            ./scripts/deploy.sh
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "Deploy failed — check the VPS logs (docker compose logs app)."

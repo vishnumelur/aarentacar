@@ -1,4 +1,4 @@
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { env } from '@/lib/env';
 
 let _client: S3Client | null = null;
@@ -28,3 +28,16 @@ export const BUCKETS = {
 } as const;
 
 export type BucketName = (typeof BUCKETS)[keyof typeof BUCKETS];
+
+/**
+ * Download an object from MinIO into a Buffer. Used by the `scan-uploaded-file`
+ * worker job (Plan #13) to stream uploaded bytes to clamd.
+ */
+export async function getObjectBuffer(bucket: string, key: string): Promise<Buffer> {
+  const res = await s3().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const body = res.Body as { transformToByteArray?: () => Promise<Uint8Array> } | undefined;
+  if (!body?.transformToByteArray) {
+    throw new Error(`empty body for ${bucket}/${key}`);
+  }
+  return Buffer.from(await body.transformToByteArray());
+}

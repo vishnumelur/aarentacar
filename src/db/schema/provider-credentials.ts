@@ -32,6 +32,9 @@ export const credentialProviderEnum = pgEnum('credential_provider', [
   'tabby',
   'mapbox',
   'smtp',
+  // Observability DSN providers (Plan #13). GlitchTip is Sentry-API-compatible.
+  'glitchtip',
+  'sentry',
 ]);
 
 export const credentialEnvEnum = pgEnum('credential_env', ['live', 'test']);
