@@ -5,7 +5,6 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { bookings, bookingEvents, auditLogs, payments, refunds } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
-import { canAccessPortal } from '@/lib/auth/roles';
 import * as stripeProvider from '@/lib/payments/stripe';
 import * as tabbyProvider from '@/lib/payments/tabby';
 
@@ -35,7 +34,8 @@ export async function issueRefund(input: {
   reason?: string;
 }): Promise<IssueRefundOutcome> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  // Money-movement path: agents are excluded; managers/superadmins only.
+  if (!user || (user.role !== 'manager' && user.role !== 'superadmin')) {
     return { ok: false, error: 'forbidden' };
   }
   if (!input.bookingId) return { ok: false, error: 'invalid_input' };
@@ -65,6 +65,16 @@ export async function issueRefund(input: {
   }
   if (amountAed > payment.amountAed) return { ok: false, error: 'amount_exceeds_payment' };
   if (!payment.gatewayRef) return { ok: false, error: 'no_refundable_payment' };
+
+  // Guard against cumulative over-refunding: the new amount must fit within the
+  // remaining (un-refunded) balance, not just the original charge.
+  const priorRefunds = await db
+    .select({ amountAed: refunds.amountAed })
+    .from(refunds)
+    .where(and(eq(refunds.paymentId, payment.id), eq(refunds.status, 'succeeded')));
+  const alreadyRefunded = priorRefunds.reduce((sum, r) => sum + r.amountAed, 0);
+  const remaining = payment.amountAed - alreadyRefunded;
+  if (amountAed > remaining) return { ok: false, error: 'amount_exceeds_payment' };
 
   let gatewayRefundId = '';
   try {
@@ -102,13 +112,14 @@ export async function issueRefund(input: {
       })
       .returning({ id: refunds.id });
 
-    const fullRefund = amountAed === payment.amountAed;
-    await tx
-      .update(payments)
-      .set({ status: 'refunded', updatedAt: new Date() })
-      .where(eq(payments.id, payment.id));
-
+    // The payment is fully refunded only once cumulative refunds reach the
+    // original charge; otherwise it stays 'succeeded' (partially refunded).
+    const fullRefund = alreadyRefunded + amountAed === payment.amountAed;
     if (fullRefund) {
+      await tx
+        .update(payments)
+        .set({ status: 'refunded', updatedAt: new Date() })
+        .where(eq(payments.id, payment.id));
       await tx
         .update(bookings)
         .set({ status: 'refunded', updatedAt: new Date() })

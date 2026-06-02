@@ -1,4 +1,4 @@
-import { pgTable, uuid, jsonb, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, jsonb, timestamp, integer } from 'drizzle-orm/pg-core';
 import { users } from './users';
 import { bytea } from './provider-credentials';
 
@@ -18,6 +18,9 @@ export const totpSecrets = pgTable('totp_secrets', {
   recoveryCodesHashed: jsonb('recovery_codes_hashed').$type<string[]>().notNull().default([]),
   enabledAt: timestamp('enabled_at', { withTimezone: true }),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  // Highest TOTP time-step counter that has been accepted at login. A code whose
+  // counter is <= this value is a replay and is rejected.
+  lastUsedCounter: integer('last_used_counter'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

@@ -31,8 +31,14 @@ export async function POST(req: Request): Promise<Response> {
       console.warn('stripe webhook signature verification failed', err);
       return new Response('invalid signature', { status: 400 });
     }
+  } else if (process.env.NODE_ENV === 'production') {
+    // Never trust an unsigned body in production — a forged request could mark
+    // unpaid bookings as paid. Fail closed until a secret is configured.
+    console.error('stripe webhook secret not configured in production — refusing to process');
+    return new Response('webhook secret not configured', { status: 503 });
   } else {
-    // No secret configured (dev/test): trust the body.
+    // No secret configured (dev/test only): trust the body so synthetic events
+    // can drive the status machine.
     try {
       event = JSON.parse(body) as Stripe.Event;
     } catch {
@@ -56,6 +62,7 @@ export async function POST(req: Request): Promise<Response> {
       await markPaymentFailed(pi.id, pi);
     } else if (event.type === 'charge.refunded') {
       const charge = event.data.object as Stripe.Charge;
+      // We issue one refund per charge, so data[0] is the relevant refund.
       const refundId = charge.refunds?.data?.[0]?.id;
       if (refundId) await markRefundSucceeded(refundId);
     }

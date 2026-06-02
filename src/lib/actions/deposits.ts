@@ -5,7 +5,6 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { bookings, bookingEvents, auditLogs, paymentHolds } from '@/db/schema';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
-import { canAccessPortal } from '@/lib/auth/roles';
 import * as stripeProvider from '@/lib/payments/stripe';
 
 /**
@@ -61,7 +60,8 @@ export async function releaseDeposit(input: {
   holdId: string;
 }): Promise<ReleaseDepositOutcome> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  // Money-movement path: agents are excluded; managers/superadmins only.
+  if (!user || (user.role !== 'manager' && user.role !== 'superadmin')) {
     return { ok: false, error: 'forbidden' };
   }
   if (!input.holdId) return { ok: false, error: 'invalid_input' };
@@ -151,7 +151,8 @@ export async function captureDeposit(input: {
   amountAed: number;
 }): Promise<CaptureDepositOutcome> {
   const user = await getCurrentUser();
-  if (!user || !canAccessPortal(user.role, 'manager')) {
+  // Money-movement path: agents are excluded; managers/superadmins only.
+  if (!user || (user.role !== 'manager' && user.role !== 'superadmin')) {
     return { ok: false, error: 'forbidden' };
   }
   if (!input.holdId || !Number.isInteger(input.amountAed) || input.amountAed <= 0) {

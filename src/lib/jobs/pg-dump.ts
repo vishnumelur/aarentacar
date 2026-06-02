@@ -15,9 +15,23 @@ export async function runPgDumpToBackups(now: Date = new Date()): Promise<string
   const stamp = now.toISOString().replace(/[:.]/g, '-');
   const key = `pg-dump-${stamp}.sql.gz`;
 
+  // Parse DATABASE_URL into libpq env vars so the password is never visible in
+  // the process argv (ps aux / /proc/<pid>/cmdline). pg_dump reads PGHOST etc.
+  const dbUrl = new URL(env().DATABASE_URL);
+  const pgEnv: NodeJS.ProcessEnv = { ...process.env };
+  if (dbUrl.hostname) pgEnv.PGHOST = dbUrl.hostname;
+  if (dbUrl.port) pgEnv.PGPORT = dbUrl.port;
+  if (dbUrl.username) pgEnv.PGUSER = decodeURIComponent(dbUrl.username);
+  if (dbUrl.password) pgEnv.PGPASSWORD = decodeURIComponent(dbUrl.password);
+  const dbName = dbUrl.pathname.replace(/^\//, '');
+  if (dbName) pgEnv.PGDATABASE = dbName;
+
+  const STDERR_CAP = 64 * 1024; // stop accumulating runaway error output
+
   const buffer = await new Promise<Buffer>((resolve, reject) => {
-    const dump = spawn('pg_dump', ['--no-owner', '--no-acl', env().DATABASE_URL], {
+    const dump = spawn('pg_dump', ['--no-owner', '--no-acl'], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: pgEnv,
     });
     const gzip = spawn('gzip', ['-c'], { stdio: ['pipe', 'pipe', 'pipe'] });
 
@@ -25,9 +39,12 @@ export async function runPgDumpToBackups(now: Date = new Date()): Promise<string
 
     const chunks: Buffer[] = [];
     let stderr = '';
+    const appendStderr = (c: Buffer): void => {
+      if (stderr.length < STDERR_CAP) stderr += c.toString();
+    };
     gzip.stdout.on('data', (c: Buffer) => chunks.push(c));
-    dump.stderr.on('data', (c: Buffer) => (stderr += c.toString()));
-    gzip.stderr.on('data', (c: Buffer) => (stderr += c.toString()));
+    dump.stderr.on('data', appendStderr);
+    gzip.stderr.on('data', appendStderr);
 
     dump.on('error', reject);
     gzip.on('error', reject);

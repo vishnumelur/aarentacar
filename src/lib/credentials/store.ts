@@ -4,6 +4,7 @@ import { providerCredentials, auditLogs } from '@/db/schema';
 import { env } from '@/lib/env';
 import { getCurrentUser } from '@/lib/auth/get-current-user';
 import { encrypt, decrypt } from '@/lib/crypto/aes-gcm';
+import { resetStripeClient } from '@/lib/payments/stripe';
 import {
   type CredentialProvider,
   type CredentialEnv,
@@ -134,6 +135,12 @@ export async function setCredential(
 
   // Invalidate so the next read reflects the new value immediately.
   cache.delete(cacheKey(provider, credEnv, key));
+
+  // The Stripe SDK client is memoized from the secret key; drop it on rotation
+  // so the next call re-instantiates with the new credentials.
+  if (provider === 'stripe') {
+    resetStripeClient();
+  }
 }
 
 export interface CredentialListing {

@@ -31,6 +31,11 @@ export async function POST(req: Request): Promise<Response> {
     if (!verifyTabbySignature(body, sig, secret)) {
       return new Response('invalid signature', { status: 400 });
     }
+  } else if (process.env.NODE_ENV === 'production') {
+    // Never trust an unsigned body in production — a forged request could mark
+    // unpaid bookings as paid. Fail closed until a secret is configured.
+    console.error('tabby webhook secret not configured in production — refusing to process');
+    return new Response('webhook secret not configured', { status: 503 });
   }
 
   let event: TabbyWebhook;

@@ -97,9 +97,22 @@ export function verifyTotp(
   code: string,
   opts: VerifyOptions = {},
 ): boolean {
+  return verifyTotpCounter(secretBase32, code, opts) !== null;
+}
+
+/**
+ * Like {@link verifyTotp} but returns the accepted time-step counter (or null
+ * if no candidate matches). The counter lets callers reject replays of the same
+ * code within its validity window by persisting the last-accepted counter.
+ */
+export function verifyTotpCounter(
+  secretBase32: string,
+  code: string,
+  opts: VerifyOptions = {},
+): number | null {
   const digits = opts.digits ?? DEFAULT_DIGITS;
   const candidate = code.trim();
-  if (!new RegExp(`^\\d{${digits}}$`).test(candidate)) return false;
+  if (!new RegExp(`^\\d{${digits}}$`).test(candidate)) return null;
 
   const step = opts.stepSeconds ?? DEFAULT_STEP_SECONDS;
   const window = opts.window ?? 1;
@@ -108,15 +121,16 @@ export function verifyTotp(
   const secret = base32Decode(secretBase32);
 
   for (let i = -window; i <= window; i++) {
-    const expected = hotp(secret, baseCounter + i, digits);
+    const counter = baseCounter + i;
+    const expected = hotp(secret, counter, digits);
     if (
       expected.length === candidate.length &&
       timingSafeEqual(Buffer.from(expected), Buffer.from(candidate))
     ) {
-      return true;
+      return counter;
     }
   }
-  return false;
+  return null;
 }
 
 export function buildOtpauthUri(input: {

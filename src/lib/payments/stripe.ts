@@ -30,9 +30,17 @@ export async function getStripe(): Promise<Stripe> {
   return cached;
 }
 
-/** For tests: reset the memoized client so a re-mocked key takes effect. */
-export function __resetStripeForTests(): void {
+/**
+ * Drop the memoized client. Called on credential rotation (so a new secret key
+ * takes effect immediately) and from tests after re-mocking the key.
+ */
+export function resetStripeClient(): void {
   cached = null;
+}
+
+/** @deprecated use {@link resetStripeClient}; kept for existing test call sites. */
+export function __resetStripeForTests(): void {
+  resetStripeClient();
 }
 
 export function aedToFils(aed: number): number {
@@ -131,6 +139,8 @@ export async function constructWebhookEvent(
   signature: string,
   webhookSecret: string,
 ): Promise<Stripe.Event> {
-  const stripe = await getStripe();
-  return stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  // Signature verification is a local HMAC check that does NOT require a secret
+  // API key, so don't force getStripe() (which throws when the key is absent).
+  // A missing/invalid signature throws here and the route maps it to a 400.
+  return Stripe.webhooks.constructEvent(body, signature, webhookSecret);
 }

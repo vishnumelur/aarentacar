@@ -11,8 +11,16 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 export const TOTP_PENDING_COOKIE_NAME = 'aa_totp_pending';
 const TTL_MS = 5 * 60 * 1000; // 5 minutes to enter the code
 
+/**
+ * Derive a domain-separated signing key from ENCRYPTION_KEY so this token's HMAC
+ * never reuses the raw encryption key directly (key separation).
+ */
+function deriveSigningKey(key: string): Buffer {
+  return createHmac('sha256', key).update('totp-pending-signing-key').digest();
+}
+
 function sign(payload: string, key: string): string {
-  return createHmac('sha256', key).update(payload).digest('base64url');
+  return createHmac('sha256', deriveSigningKey(key)).update(payload).digest('base64url');
 }
 
 export function signTotpPending(userId: string, key: string, now: Date = new Date()): string {

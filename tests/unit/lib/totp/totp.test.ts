@@ -5,6 +5,7 @@ import {
   base32Decode,
   generateTotp,
   verifyTotp,
+  verifyTotpCounter,
   buildOtpauthUri,
   generateRecoveryCodes,
 } from '@/lib/totp/totp';
@@ -77,6 +78,27 @@ describe('verifyTotp', () => {
     const now = new Date(59 * 1000);
     expect(verifyTotp(SECRET_B32, 'abcdef', { now })).toBe(false);
     expect(verifyTotp(SECRET_B32, '12345', { now })).toBe(false);
+  });
+});
+
+describe('verifyTotpCounter (replay guard support)', () => {
+  const SECRET_B32 = base32Encode(new Uint8Array(Buffer.from('12345678901234567890', 'utf8')));
+
+  it('returns the accepted time-step counter for a valid code', () => {
+    const now = new Date(59 * 1000);
+    // t=59 -> counter = floor(59/30) = 1
+    expect(verifyTotpCounter(SECRET_B32, '287082', { now })).toBe(1);
+  });
+
+  it('returns null for a wrong code', () => {
+    expect(verifyTotpCounter(SECRET_B32, '000000', { now: new Date(59 * 1000) })).toBeNull();
+  });
+
+  it('returns the same counter for the same code within its window (enabling replay rejection)', () => {
+    const c1 = verifyTotpCounter(SECRET_B32, '287082', { now: new Date(59 * 1000) });
+    const c2 = verifyTotpCounter(SECRET_B32, '287082', { now: new Date(60 * 1000) });
+    expect(c1).toBe(1);
+    expect(c2).toBe(1);
   });
 });
 

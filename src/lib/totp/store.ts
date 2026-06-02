@@ -4,7 +4,7 @@ import { db } from '@/db';
 import { totpSecrets, type TotpSecret } from '@/db/schema';
 import { env } from '@/lib/env';
 import { encrypt, decrypt } from '@/lib/crypto/aes-gcm';
-import { verifyTotp } from './totp';
+import { verifyTotp, verifyTotpCounter } from './totp';
 
 /**
  * Server-only TOTP store (Plan #11). Encrypts the shared secret at rest with
@@ -70,10 +70,14 @@ export async function verifyLoginCode(userId: string, code: string): Promise<boo
   const row = await getTotpRow(userId);
   if (!row || row.enabledAt === null) return false;
   const secret = decryptSecret(row);
-  if (!verifyTotp(secret, code)) return false;
+  const counter = verifyTotpCounter(secret, code);
+  if (counter === null) return false;
+  // Replay guard: a code is single-use across its validity window. Reject any
+  // counter at or below the last accepted one.
+  if (row.lastUsedCounter !== null && counter <= row.lastUsedCounter) return false;
   await db
     .update(totpSecrets)
-    .set({ lastUsedAt: new Date(), updatedAt: new Date() })
+    .set({ lastUsedCounter: counter, lastUsedAt: new Date(), updatedAt: new Date() })
     .where(eq(totpSecrets.userId, userId));
   return true;
 }
