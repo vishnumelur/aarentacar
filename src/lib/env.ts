@@ -25,6 +25,13 @@ const envSchema = z.object({
   // Bank-transfer payout details surfaced to customers (manager-configurable in Plan #10).
   BANK_TRANSFER_DETAILS: z.string().optional(),
   MAPBOX_TOKEN: z.string().optional(),
+  // Public Mapbox token shipped to the browser for the live-tracking map.
+  // Empty strings (from .env.example placeholders) coerce to undefined so
+  // the map degrades to a non-map fallback instead of failing.
+  NEXT_PUBLIC_MAPBOX_TOKEN: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().optional(),
+  ),
   MINIO_ENDPOINT: z.string().default('localhost'),
   MINIO_PORT: z.coerce.number().int().default(9000),
   MINIO_ACCESS_KEY: z.string().default('minio-dev'),

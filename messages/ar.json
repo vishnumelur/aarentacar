@@ -34,5 +34,22 @@
   "Language": {
     "switchToArabic": "العربية",
     "switchToEnglish": "English"
+  },
+  "tracking": {
+    "etaLabel": "الوصول المتوقع",
+    "call": "اتصال",
+    "whatsapp": "واتساب",
+    "recenter": "إعادة توسيط الخريطة",
+    "mapUnavailable": "الخريطة المباشرة غير متاحة حالياً. سنواصل إبلاغك بحالة السائق والوقت المتوقع للوصول أدناه.",
+    "driver": {
+      "unknown": "سائقك"
+    },
+    "status": {
+      "assigned": "تم تعيين السائق",
+      "onTheWay": "في الطريق",
+      "minutesAway": "على بعد {minutes} دقيقة",
+      "almostThere": "اقترب من الوصول",
+      "arrived": "وصل السائق"
+    }
   }
 }

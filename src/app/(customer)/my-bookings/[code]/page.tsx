@@ -55,6 +55,18 @@ export default async function CustomerBookingDetailPage({
         </div>
       </div>
 
+      {(booking.status === 'dispatched' || booking.status === 'in_progress') && (
+        <div className="rounded-lg border-2 border-primary bg-card p-4 flex items-center justify-between">
+          <span className="text-sm font-medium">Your driver is on the move.</span>
+          <Link
+            href={`/my-bookings/${booking.code}/track`}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+          >
+            Track driver
+          </Link>
+        </div>
+      )}
+
       {booking.status === 'pending_payment' && (
         <div className="rounded-lg border-2 border-primary bg-card p-4 flex items-center justify-between">
           <span className="text-sm font-medium">This booking is awaiting payment.</span>

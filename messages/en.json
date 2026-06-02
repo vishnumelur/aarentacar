@@ -34,5 +34,22 @@
   "Language": {
     "switchToArabic": "العربية",
     "switchToEnglish": "English"
+  },
+  "tracking": {
+    "etaLabel": "ETA",
+    "call": "Call",
+    "whatsapp": "WhatsApp",
+    "recenter": "Recenter map",
+    "mapUnavailable": "Live map is unavailable right now. We'll still keep you posted on your driver's status and ETA below.",
+    "driver": {
+      "unknown": "Your driver"
+    },
+    "status": {
+      "assigned": "Driver assigned",
+      "onTheWay": "On the way",
+      "minutesAway": "{minutes} minutes away",
+      "almostThere": "Almost there",
+      "arrived": "Driver has arrived"
+    }
   }
 }
