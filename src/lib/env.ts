@@ -11,7 +11,19 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().default(25),
   SMTP_FROM: z.email().default('no-reply@aa-rentacar.com'),
   STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // Publishable key is safe to ship to the browser (Stripe Elements).
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().optional(),
+  ),
   TABBY_SECRET_KEY: z.string().optional(),
+  TABBY_PUBLIC_KEY: z.string().optional(),
+  TABBY_WEBHOOK_SECRET: z.string().optional(),
+  // Public base URL used to build Tabby success/cancel redirect URLs.
+  APP_BASE_URL: z.string().default('http://localhost:3000'),
+  // Bank-transfer payout details surfaced to customers (manager-configurable in Plan #10).
+  BANK_TRANSFER_DETAILS: z.string().optional(),
   MAPBOX_TOKEN: z.string().optional(),
   MINIO_ENDPOINT: z.string().default('localhost'),
   MINIO_PORT: z.coerce.number().int().default(9000),

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import {
   bookings,
@@ -10,9 +10,12 @@ import {
   vehicles,
   vehicleTypes,
   users,
+  payments,
+  paymentHolds,
 } from '@/db/schema';
 import { ApprovalPanel } from '@/components/manager/approval-panel';
 import { DispatchPanel } from '@/components/manager/dispatch-panel';
+import { PaymentsPanel } from '@/components/manager/payments-panel';
 
 export default async function ManagerBookingDetailPage({
   params,
@@ -47,6 +50,26 @@ export default async function ManagerBookingDetailPage({
     .where(eq(bookingEvents.bookingId, booking.id))
     .orderBy(asc(bookingEvents.createdAt));
 
+  const [refundablePayment] = await db
+    .select({ amountAed: payments.amountAed, method: payments.method })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.bookingId, booking.id),
+        eq(payments.status, 'succeeded'),
+        inArray(payments.method, ['card', 'tabby']),
+      ),
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(1);
+
+  const [hold] = await db
+    .select({ id: paymentHolds.id, amountAed: paymentHolds.amountAed, status: paymentHolds.status })
+    .from(paymentHolds)
+    .where(eq(paymentHolds.bookingId, booking.id))
+    .orderBy(desc(paymentHolds.createdAt))
+    .limit(1);
+
   return (
     <div className="space-y-6">
       <Link href="/manager/bookings" className="text-sm text-primary underline">
@@ -67,6 +90,14 @@ export default async function ManagerBookingDetailPage({
 
       {booking.status === 'pending_approval' && <ApprovalPanel bookingId={booking.id} />}
       {booking.status === 'approved' && <DispatchPanel bookingId={booking.id} />}
+
+      {(refundablePayment || hold) && (
+        <PaymentsPanel
+          bookingId={booking.id}
+          refundable={refundablePayment ?? null}
+          hold={hold ?? null}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border bg-card p-6 space-y-2 text-sm">

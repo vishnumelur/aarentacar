@@ -8,7 +8,7 @@
 
 ## Headline status
 
-**6 of 13 plans shipped** end-to-end. Roadmap is complete (all 13 plans written + Plan #14 holding pen). Customers can register, get verified, browse, book, and reach `pending_payment`. Managers can do the full operational loop including dispatch. Drivers can install the PWA, accept jobs, capture handover + return inspections, and ping their live location. Payments are the next milestone (Plan #7) that unlocks real revenue and natural status flow into `pending_approval`.
+**7 of 13 plans shipped** end-to-end. Roadmap is complete (all 13 plans written + Plan #14 holding pen). Customers can register, get verified, browse, book, and now **pay** (Stripe card incl. Apple/Google Pay, Tabby BNPL, Cash on Delivery, Bank Transfer) — paid online flips the booking to `pending_approval`; offline methods route through manual confirmation. Card payments place a refundable manual-capture deposit hold; managers can capture/release deposits and issue refunds. Webhooks are signature-verified and idempotent. Managers can do the full operational loop including dispatch. Drivers can install the PWA, accept jobs, capture handover + return inspections, and ping their live location. Live tracking (Plan #8) is next.
 
 | Plan | Title | Status |
 |---|---|---|
@@ -18,7 +18,7 @@
 | #4 | Browse & Book (public search, vehicle detail, booking engine pre-payment) | ✅ shipped |
 | #5 | Manager Dispatch (approve/reject + nearest-driver auto-suggest + dispatch) | ✅ shipped |
 | #6 | Driver Portal PWA (push, accept, handover with PDF e-signature, return diff, live ping) | ✅ shipped |
-| #7 | Payments (Stripe + Tabby + COD + Bank Transfer + deposits + refunds) | written, ready |
+| #7 | Payments (Stripe + Tabby + COD + Bank Transfer + deposits + refunds) | ✅ shipped |
 | #8 | Live Tracking (SSE + Swiggy-style animated map) | written, ready |
 | #9 | Provider Credentials UI (AES-256-GCM encrypted store) | written, ready |
 | #10 | Manager Portal Completion (dashboard KPIs, reports, promos, agent perms, settings) | written, ready |
